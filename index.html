@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>vEdit</title>
+
+    <script src="app/external/jquery.js"></script>
+    <script src="app/external/jquery-ui.js"></script>
+    <link href="app/external/jquery-ui.css" rel="stylesheet" type="text/css">
+
+    <script src="app/external/codemirror.js"></script>
+    <link href="app/external/codemirror.css" rel="stylesheet" type="text/css">
+
+    <link href="app/main.css" rel="stylesheet" type="text/css">
+
+    <script src="app/index.js"></script>
+
+    <style>
+      .draggable {
+        padding: 5px;
+        float: left;
+        margin: 0 10px 10px 0;
+        font-size: .9em;
+      }
+
+      .ui-widget-header p, .ui-widget-content p { margin: 0; }
+      #snaptarget { height: 140px; }
+    </style>
+    <script>
+      $(function() {
+        onLoad();
+      });
+    </script>
+  </head>
+  <body>
+    <button onclick="createNewView()">New View</button>
+    <div id="editorContainer"></div>
+  </body>
+</html>

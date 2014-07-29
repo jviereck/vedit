@@ -1,0 +1,64 @@
+html {
+  height: 100%;
+}
+
+.CodeMirror  {
+  height: 100%;
+  border: 1px solid gray;
+  font-family: Meslo LG S;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+#editorContainer {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+}
+
+.editor-view {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  z-index: 4;
+}
+
+.editor-container {
+  height: 100%;
+}
+
+/* === Error gutter and marker === */
+.error-gutter {
+  width: 20px;
+}
+
+.lint-error-span {
+  left: 20px;
+  background: #ffa;
+  color: #a00;
+  padding: 2px 5px 3px;
+  display: none;
+  position: absolute;
+}
+
+.lint-error-icon {
+  color: white; background-color: red;
+  font-weight: bold;
+  border-radius: 50%;
+  padding: 0 3px;
+  margin-right: 7px;
+  position: relative;
+}
+
+.lint-error-ul {
+  padding-left: 15px;
+  white-space: nowrap;
+}
+
+.lint-error-icon:hover {
+  background-color: orange;
+}
+
+.lint-error-icon:hover > span {
+  display: block;
+}
