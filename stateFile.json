@@ -1,0 +1,39 @@
+{
+  "stateFilePath": "/Users/jviereck/develop/vedit/stateFile.json",
+  "views": [
+    {
+      "top": "100px",
+      "left": "60px",
+      "width": "",
+      "height": "",
+      "filePath": "/Users/jviereck/develop/vedit/server.js",
+      "scrollInfo": {
+        "left": 0,
+        "top": 0,
+        "height": 500,
+        "width": 533,
+        "clientHeight": 500,
+        "clientWidth": 498
+      }
+    },
+    {
+      "top": "240px",
+      "left": "660px",
+      "width": "520px",
+      "height": "240px",
+      "fileOptions": {
+        "from": 19,
+        "to": 35
+      },
+      "filePath": "/Users/jviereck/develop/vedit/app/index.js",
+      "scrollInfo": {
+        "left": 1,
+        "top": 0,
+        "height": 240,
+        "width": 542,
+        "clientHeight": 240,
+        "clientWidth": 518
+      }
+    }
+  ]
+}
