@@ -11,13 +11,17 @@ app.use(function(req, res, next){
   req.on('end', next);
 });
 
+function decodeURL(url) {
+	return url.replace(/\|/g, '/')
+}
+
 app.get('/fs/:name', function(req, res) {
-  res.sendfile(req.params.name.replace(/\|/g, '/'));
+  res.sendfile(decodeURL(req.params.name));
 })
 
 app.post('/fs/:name', function(req, res) {
-  console.log('Save file: ' + req.params.name);
-  var filePath = req.params.name.replace(/\|/g, '/');
+	var filePath = decodeURL(req.params.name);
+  console.log('Save file: ' + filePath);
   fs.writeFileSync(filePath, req.text, 'utf8');
   res.send(200, 'saved');
 })

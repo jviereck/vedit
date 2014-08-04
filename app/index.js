@@ -169,6 +169,7 @@ function EditorView(parentDom, doc) {
     fixedGutter: true,
     lineNumbers: true,
     indentWithTabs: false,
+    rulers: [{color: '#ddd', column: 80, lineStyle: 'dashed'}],
     extraKeys: {
       "Cmd-D": function(cm) {
         self.close();
@@ -203,14 +204,6 @@ function EditorView(parentDom, doc) {
       }
     }
   });
-
-  // Based on 'codemirror/demo/indentwrap.html':
-  // var charWidth = this.editor.defaultCharWidth(), basePadding = 4;
-  // this.editor.on("renderLine", function(cm, line, elt) {
-  //   var off = (CodeMirror.countColumn(line.text, null, cm.getOption("tabSize")) + 2) * charWidth;
-  //   elt.style.textIndent = "-" + off + "px";
-  //   elt.style.paddingLeft = (basePadding + off) + "px";
-  // });
 }
 
 EditorView.prototype.layout = function() {
@@ -223,7 +216,7 @@ EditorView.prototype.focus = function() {
 
 EditorView.prototype.close = function() {
   this.parentDom.removeChild(this.dom);
-  stateManager.removeView(view);
+  stateManager.removeView(this);
 }
 
 EditorView.prototype.getFilePath = function() {
@@ -231,22 +224,24 @@ EditorView.prototype.getFilePath = function() {
 }
 
 EditorView.prototype.getState = function() {
+  var res = {};
+  var scrollInfo = this.editor.getScrollInfo();
   var dom = this.dom;
-  var res = {
-    top: dom.style.top,
-    left: dom.style.left,
-    width: dom.style.width,
-    height: dom.style.height
-  };
+
+  res.top = dom.style.top;
+  res.left = dom.style.left;
+  res.width = dom.style.width;
+  res.height = dom.style.height;
   res.fileOptions = this.fileOptions;
-  res.filePath = this.getFilePath();;
-  res.scrollInfo = this.editor.getScrollInfo();
+  res.filePath = this.getFilePath();
+  res.scrollX = scrollInfo.left;
+  res.scrollY = scrollInfo.top;
   return res;
 }
 
 EditorView.prototype.showFile = function(filePath, options) {
   var self = this;
-  docManager.get(filePath, options).then(function(doc) {
+  return docManager.get(filePath, options).then(function(doc) {
     self.editor.swapDoc(doc);
   }, function() {
     self.editor.setValue('Failed to get the file. Closing view again.')
@@ -254,14 +249,18 @@ EditorView.prototype.showFile = function(filePath, options) {
 }
 
 EditorView.prototype.setState = function(state) {
+  var self = this;
   var dom = this.dom;
   dom.style.top = state.top;
   dom.style.left = state.left;
   dom.style.width = state.width;
   dom.style.height = state.height;
   this.fileOptions = state.fileOptions;
-  this.showFile(state.filePath, state.fileOptions);
-  this.editor.scrollIntoView(state.scrollInfo);
+  this.showFile(state.filePath, state.fileOptions).then(function() {
+    // Set the scroll position only after the file is loaded, such that the
+    // scrollIntoView will apply to the loaded file.
+    self.editor.scrollTo(state.scrollX, state.scrollY);
+  });
 }
 
 function createNewView(ev, filePath, state) {
