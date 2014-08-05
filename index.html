@@ -25,6 +25,8 @@
 
     <link href="app/main.css" rel="stylesheet" type="text/css">
 
+    <script src="app/external/lodash.js"></script>
+
     <script src="app/index.js"></script>
 
     <style>
@@ -45,8 +47,7 @@
     </script>
   </head>
   <body>
-    <div id="editorContainer">
-      <div class="searchUI ui-widget-content draggable">
+    <script id="searchUI-template" type="script/template">
         <table class="searchUI-table">
           <tr>
             <td>Cmd:</td>
@@ -58,7 +59,8 @@
           </tr>
         </table>
         <div class="searchUI-editor"></div>
-      </div>
+    </script>
+    <div id="editorContainer">
     </div>
   </body>
 </html>

@@ -23,7 +23,7 @@ html {
   z-index: 4;
 }
 
-.searchUI {
+.searchUI-view {
   position: absolute;
   width: 500px;
   height: 500px;

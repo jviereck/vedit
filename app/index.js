@@ -33,6 +33,7 @@ function StateManager(stateFilePath) {
   this.stateFilePath = stateFilePath;
   this.views = [];
   this.allowSave = true;
+  this.appliesStateFile = true;
 
   if (!stateFilePath) {
     var lastState = localStorage.getItem('lastState');
@@ -49,13 +50,19 @@ function StateManager(stateFilePath) {
     var self = this;
     fs.get(stateFilePath).then(function(content) {
       self.applyState(JSON.parse(content));
+      self.appliesStateFile = false;
     }, function(error) {
       alert('Could not load the state file. Sure there is one?');
+      this.appliesStateFile = false;
     });
+  } else {
+    this.appliesStateFile = false;
   }
 }
 
 StateManager.prototype.addView = function(view) {
+  if (this.appliesStateFile) return;
+
   this.views.push(view);
   this.save();
 }
@@ -72,7 +79,12 @@ StateManager.prototype.setStateFilePath = function(stateFilePath) {
 StateManager.prototype.applyState = function(state) {
   this.stateFilePath = state.stateFilePath;
   this.views = state.views.map(function(viewState) {
-    return createNewView(null, null, viewState);
+    var editorContainer = document.getElementById('editorContainer');
+    if (viewState.type == 'EditorView') {
+      return new EditorView(editorContainer, viewState);
+    } else if (viewState.type == 'SearchView') {
+      return new SearchView(editorContainer, viewState);
+    }
   });
 }
 
@@ -86,18 +98,13 @@ StateManager.prototype.close = function() {
 
 StateManager.prototype.save = function() {
   if (!this.allowSave) return;
+  if (this.appliesStateFile) return;
 
   var state = JSON.stringify({
     stateFilePath: this.stateFilePath,
-    views: this.views.filter(function(view) {
-      // Don't save the views that are associated to documents without a
-      // filename.
-      // FIXME: In this case, the content of the file should be saved on the
-      //   state directly.
-      return view.getFilePath();
-    }).map(function(view) {
+    views: _.compact(this.views.map(function(view) {
       return view.getState();
-    })
+    }))
   }, null, 2);
   localStorage.setItem('lastState', state);
   if (this.stateFilePath) {
@@ -195,7 +202,90 @@ var DraggableMixin = {
   }
 };
 
-function EditorView(parentDom, doc) {
+function SearchView(parentDom, state) {
+  var self = this;
+  this.parentDom = parentDom;
+
+  var dom = this.dom = document.createElement('div');
+  dom.setAttribute('class', 'searchUI-view ui-widget-content draggable');
+
+  var domTemplate = document.getElementById('searchUI-template');
+  dom.innerHTML = domTemplate.textContent;
+
+  var editorDom = dom.querySelector('.searchUI-editor');
+  var editor = this.editor = CodeMirror(editorDom, {
+    extraKeys: {
+      "Cmd-D": function(cm) {
+        self.close();
+      }
+    }
+  });
+
+  var cmdInput = this.cmdInput = dom.querySelector('.searchUI-cmd');
+  var queryInput = this.queryInput = dom.querySelector('.searchUI-search');
+  queryInput.addEventListener('keydown', function(evt) {
+    if (evt.keyCode == 13) {
+      self.exec();
+    }
+  });
+
+  this.initDraggable();
+
+  this.setState(state || this.getDefaultState());
+
+  stateManager.addView(this);
+  parentDom.appendChild(dom);
+}
+
+mixin(SearchView.prototype, DraggableMixin);
+
+SearchView.prototype.exec = function() {
+  var options = {};
+  var query = this.queryInput.value;
+  var cmdRaw = this.cmdInput.value;
+  var cwd = cmdRaw.split('@')[1];
+  var cmd = cmdRaw.split('@')[0].trim().replace('$0', query);
+
+  if (cwd) options.cwd = cwd.trim();
+
+  var self = this;
+  this.editor.setValue('Executing...');
+  $.post('/exec', JSON.stringify({
+    cmd: cmd,
+    options: options
+  }), function(content) {
+    self.editor.setValue(content);
+  });
+}
+
+SearchView.prototype.getDefaultState = function() {
+  var res = { type: 'SearchView' };
+
+  this.getStateDraggable(res);
+  res.cmd = 'ag -A 3 -B 3  -i $0 @ ' + stateManager.stateFilePath;
+  res.query = 'HelloWorld';
+  return res;
+}
+
+SearchView.prototype.getState = function() {
+  var res = this.getDefaultState();
+  res.cmd = this.cmdInput.value;
+  res.query = this.queryInput.value;
+  return res;
+}
+
+SearchView.prototype.setState = function(state) {
+  this.setStateDraggable(state);
+  this.cmdInput.value = state.cmd;
+  this.queryInput.value = state.query;
+}
+
+SearchView.prototype.close = function() {
+  this.parentDom.removeChild(this.dom);
+  stateManager.removeView(this);
+}
+
+function EditorView(parentDom, state) {
   var self = this;
   this.parentDom = parentDom;
 
@@ -232,6 +322,10 @@ function EditorView(parentDom, doc) {
         createNewView(null, editor.getDoc().filePath);
       },
 
+      "Shift-Cmd-F": function(cm) {
+        new SearchView(parentDom);
+      },
+
       "Ctrl-L": function(cm) {
         var selections = editor.listSelections();
         if (selections.length == 0) {
@@ -252,8 +346,13 @@ function EditorView(parentDom, doc) {
       }
     }
   });
-  // Init the mixins.
+
+  if (state) this.setState(state);
+
+    // Init the mixins.
   this.initDraggable(this.layout.bind(this) /* onResize */);
+
+  stateManager.addView(this);
 }
 
 mixin(EditorView.prototype, DraggableMixin);
@@ -276,13 +375,19 @@ EditorView.prototype.getFilePath = function() {
 }
 
 EditorView.prototype.getState = function() {
-  var res = {};
+  var filePath = this.getFilePath();
+
+  if (!filePath) {
+   	return;
+  }
+
+  var res = { type: 'EditorView' };
   var scrollInfo = this.editor.getScrollInfo();
   var dom = this.dom;
 
   this.getStateDraggable(res);
   res.fileOptions = this.fileOptions;
-  res.filePath = this.getFilePath();
+  res.filePath = filePath;
   res.scrollX = scrollInfo.left;
   res.scrollY = scrollInfo.top;
   return res;
@@ -335,7 +440,6 @@ function createNewView(ev, filePath, state) {
     view.setState(state);
   } else {
     view.showFile(filePath);
-    stateManager.addView(view);
   }
   return view;
 }
@@ -373,42 +477,19 @@ function onLoad() {
 
   stateManager = new StateManager(stateFile);
 
-  document.getElementById('editorContainer').
-    addEventListener('dblclick', function(ev) {
-      createNewView(ev);
-      ev.preventDefault();
-      ev.stopPropagation();
-      return false;
-    });
+  var editorContainer = document.getElementById('editorContainer');
+  editorContainer.addEventListener('dblclick', function(ev) {
+    if (ev.target !== editorContainer) return;
 
-  // Make the search UI dragable.
-  $('.searchUI').
-    draggable({ grid: [ kGRID, kGRID ] }).
-    resizable({
-      grid: kGRID
-    });
-
-  var editor = CodeMirror(document.querySelector('.searchUI-editor'));
-
-  var cmdInput = document.querySelector('.searchUI-cmd');
-  var queryInput = document.querySelector('.searchUI-search');
-  queryInput.addEventListener('change', function(evt) {
-    var options = {};
-    var query = queryInput.value;
-    var cmdRaw = cmdInput.value;
-    var cwd = cmdRaw.split('@')[1];
-    var cmd = cmdRaw.split('@')[0].trim().replace('$0', query);
-
-    if (cwd) options.cwd = cwd.trim();
-
-    editor.setValue('Executing...');
-    $.post('/exec', JSON.stringify({
-      cmd: cmd,
-      options: options
-    }), function(content) {
-      editor.setValue(content);
-    })
+    createNewView(ev);
+    ev.preventDefault();
+    ev.stopPropagation();
+    return false;
   });
+  
+  setInterval(function() {
+    stateManager.save();
+  }, 5000);
 }
 
 
