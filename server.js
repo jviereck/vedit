@@ -1,3 +1,4 @@
+var exec = require('exec');
 var express = require('express');
 var fs = require('fs');
 var path = require('path');
@@ -12,19 +13,32 @@ app.use(function(req, res, next){
 });
 
 function decodeURL(url) {
-	return url.replace(/\|/g, '/')
+  return url.replace(/\|/g, '/')
 }
 
+// FS stuff.
 app.get('/fs/:name', function(req, res) {
   res.sendfile(decodeURL(req.params.name));
-})
+});
 
 app.post('/fs/:name', function(req, res) {
-	var filePath = decodeURL(req.params.name);
+  var filePath = decodeURL(req.params.name);
   console.log('Save file: ' + filePath);
   fs.writeFileSync(filePath, req.text, 'utf8');
-  res.send(200, 'saved');
-})
+  res.status(200).send('saved');
+});
+
+// EXEC stuff.
+app.post('/exec/', function(req, res) {
+  var data = JSON.parse(req.text);
+  exec(data.cmd, data.options || {}, function(err, out, code) {
+    if (err instanceof Error) {
+	  res.status(500).send(err.toString());
+    } else {
+	  res.status(200).send(out);
+    }
+  });
+});
 
 app.use(express.static(__dirname)); //  "public" off of current is root
 

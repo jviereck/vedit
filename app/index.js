@@ -2,13 +2,30 @@ var kGRID = 20;
 
 var stateManager = null;
 
+function decodeFilePath(filePath) {
+  return filePath.replace(/\|/g, '/');
+}
+
+function encodeFilePath(filePath) {
+  return filePath.replace(/\//g, '|');
+}
+
 var fs = {
-  get: function(filePath, callback, type) {
-    return $.get('fs/' + filePath.replace(/\//g, '|'), callback, type || 'text');
+  get: function(filePath, type) {
+    // The following should be the same as wrapping the entire `$.get` in
+    // a `Promise.resolve(...)`, however, it does not :/ Doing it therefore
+    // this way, which is ugly, but it works :)
+    return new Promise(function(resolve, reject) {
+      $.get('fs/' + encodeFilePath(filePath), function() {
+        console.log('success');
+      }, type || 'text').done(resolve).fail(reject);
+    });
+
   },
 
   set: function(filePath, content) {
-    return $.post('fs/' + filePath.replace(/\//g, '|'), content);
+    return Promise.resolve(
+        $.post('fs/' + encodeFilePath(filePath), content));
   }
 }
 
@@ -30,8 +47,10 @@ function StateManager(stateFilePath) {
 
   if (stateFilePath) {
     var self = this;
-    fs.get(stateFilePath, function(content) {
+    fs.get(stateFilePath).then(function(content) {
       self.applyState(JSON.parse(content));
+    }, function(error) {
+      alert('Could not load the state file. Sure there is one?');
     });
   }
 }
@@ -110,13 +129,13 @@ DocManager.prototype.get = function(filePath, options) {
       docs[filePath] = new Promise(function(resolve, reject) {
 
         // Request the fiel content.
-        fs.get(filePath, function(content) {
+        fs.get(filePath).then(function(content) {
           var fileEnding = filePath.substring(filePath.lastIndexOf('.') + 1);
           var fileMode = self.fileExtensionModeMap[fileEnding] || '';
           // Once the file content is there, create a new CodeMirror document
           // object and resolve the root-doc-promise.
           resolve(new CodeMirror.Doc(content, fileMode));
-        }, 'text').fail(reject);
+        }, reject);
       })
     }
 
@@ -138,6 +157,44 @@ DocManager.prototype.saveAll = function() {
   }, this)
 }
 
+var mixin = function(a, b) {
+  for (var name in b) {
+    if (b.hasOwnProperty(name)) {
+      a[name] = b[name];
+    }
+  }
+  return a;
+}
+
+var DraggableMixin = {
+  initDraggable: function(onResize) {
+    $(this.dom).
+      draggable({ grid: [ kGRID, kGRID ] }).
+      resizable({
+        grid: kGRID,
+        resize: function(event, ui) {
+          if (onResize) onResize();
+        }
+      });
+  },
+
+  getStateDraggable: function(state) {
+    var dom = this.dom;
+    state.top = dom.style.top;
+    state.left = dom.style.left;
+    state.width = dom.style.width;
+    state.height = dom.style.height;
+  },
+
+  setStateDraggable: function(state) {
+    var dom = this.dom;
+    dom.style.top = state.top;
+    dom.style.left = state.left;
+    dom.style.width = state.width;
+    dom.style.height = state.height;
+  }
+};
+
 function EditorView(parentDom, doc) {
   var self = this;
   this.parentDom = parentDom;
@@ -154,15 +211,6 @@ function EditorView(parentDom, doc) {
   dom.addEventListener('dblclick', function(ev) {
     ev.stopPropagation();
   })
-
-  $(this.dom).
-    draggable({ grid: [ kGRID, kGRID ] }).
-    resizable({
-      grid: kGRID,
-      resize: function(event, ui) {
-        self.layout();
-      }
-    });
 
   var editor = this.editor = CodeMirror(editorDom, {
     lineWrapping: false,
@@ -204,7 +252,11 @@ function EditorView(parentDom, doc) {
       }
     }
   });
+  // Init the mixins.
+  this.initDraggable(this.layout.bind(this) /* onResize */);
 }
+
+mixin(EditorView.prototype, DraggableMixin);
 
 EditorView.prototype.layout = function() {
   this.editor.refresh();
@@ -228,10 +280,7 @@ EditorView.prototype.getState = function() {
   var scrollInfo = this.editor.getScrollInfo();
   var dom = this.dom;
 
-  res.top = dom.style.top;
-  res.left = dom.style.left;
-  res.width = dom.style.width;
-  res.height = dom.style.height;
+  this.getStateDraggable(res);
   res.fileOptions = this.fileOptions;
   res.filePath = this.getFilePath();
   res.scrollX = scrollInfo.left;
@@ -251,10 +300,9 @@ EditorView.prototype.showFile = function(filePath, options) {
 EditorView.prototype.setState = function(state) {
   var self = this;
   var dom = this.dom;
-  dom.style.top = state.top;
-  dom.style.left = state.left;
-  dom.style.width = state.width;
-  dom.style.height = state.height;
+
+  this.setStateDraggable(state);
+
   this.fileOptions = state.fileOptions;
   this.showFile(state.filePath, state.fileOptions).then(function() {
     // Set the scroll position only after the file is loaded, such that the
@@ -304,8 +352,26 @@ function loadStateFile(filePath) {
   stateManager = new StateManager(filePath);
 }
 
+function parseLocationSearch() {
+  var res = {};
+  location.search.substring(1).split('&').forEach(function(bit) {
+    var split = bit.split('=');
+    res[split[0]] = split[1];
+  });
+  return res;
+}
+
 function onLoad() {
-  stateManager = new StateManager()
+  var stateFile = parseLocationSearch()['stateFile'];
+
+  if (!stateFile) {
+    alert(
+      'Please specify a stateFile via the ?search of the current URL\n:' +
+      'E.g.: localhost/?stateFile=/path/to/file');
+    return;
+  }
+
+  stateManager = new StateManager(stateFile);
 
   document.getElementById('editorContainer').
     addEventListener('dblclick', function(ev) {
@@ -314,4 +380,35 @@ function onLoad() {
       ev.stopPropagation();
       return false;
     });
+
+  // Make the search UI dragable.
+  $('.searchUI').
+    draggable({ grid: [ kGRID, kGRID ] }).
+    resizable({
+      grid: kGRID
+    });
+
+  var editor = CodeMirror(document.querySelector('.searchUI-editor'));
+
+  var cmdInput = document.querySelector('.searchUI-cmd');
+  var queryInput = document.querySelector('.searchUI-search');
+  queryInput.addEventListener('change', function(evt) {
+    var options = {};
+    var query = queryInput.value;
+    var cmdRaw = cmdInput.value;
+    var cwd = cmdRaw.split('@')[1];
+    var cmd = cmdRaw.split('@')[0].trim().replace('$0', query);
+
+    if (cwd) options.cwd = cwd.trim();
+
+    editor.setValue('Executing...');
+    $.post('/exec', JSON.stringify({
+      cmd: cmd,
+      options: options
+    }), function(content) {
+      editor.setValue(content);
+    })
+  });
 }
+
+

@@ -23,6 +23,35 @@ html {
   z-index: 4;
 }
 
+.searchUI {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  z-index: 9999;
+}
+
+.searchUI-args, .searchUI-cmd, .searchUI-search {
+  width: calc(100% - 10px); 
+}
+
+.searchUI-table {
+  width: 100%;
+  background-color: white;
+}
+
+.searchUI-editor-container {
+  height: 100%;
+}
+
+.searchUI-editor {
+  /* Very bad hack to get this working and positioned correctly
+   * FIXME: Make the position less magically! */
+  position: absolute;
+  bottom: 5px;
+  top: 65px;
+  width: calc(100% - 10px);
+}
+
 .editor-container {
   height: 100%;
 }
