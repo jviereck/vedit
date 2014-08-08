@@ -174,23 +174,27 @@ var mixin = function(a, b) {
 }
 
 var DraggableMixin = {
-  initDraggable: function(onResize) {
+  initDraggable: function(draggableOptions) {
+    var self = this;
     $(this.dom).
-      draggable({ grid: [ kGRID, kGRID ] }).
+      draggable(mixin({
+        grid: [ kGRID, kGRID ],
+        start: function(event, ui) { self.emit('startDragging', event, ui); },
+        stop: function(event, ui) { self.emit('stopDragging', event, ui); },
+        drag: function(event, ui) { self.emit('dragging', event, ui); }
+      }, draggableOptions || {})).
       resizable({
         grid: kGRID,
-        resize: function(event, ui) {
-          if (onResize) onResize();
-        }
+        resize: function(event, ui) { self.emit('resize', event, ui); }
       });
   },
 
   getStateDraggable: function(state) {
-    var dom = this.dom;
-    state.top = dom.style.top;
-    state.left = dom.style.left;
-    state.width = dom.style.width;
-    state.height = dom.style.height;
+    var style = window.getComputedStyle(this.dom);
+    state.top = style.top;
+    state.left = style.left;
+    state.width = style.width;
+    state.height = style.height;
   },
 
   setStateDraggable: function(state) {
@@ -199,10 +203,39 @@ var DraggableMixin = {
     dom.style.left = state.left;
     dom.style.width = state.width;
     dom.style.height = state.height;
+  },
+
+  getPositionOnRight: function() {
+    var res = {};
+    var state = {};
+    this.getStateDraggable(state);
+    res.top = state.top;
+    res.left = 'calc(' + state.left + ' + ' + state.width + ' + ' + kGRID + 'px)';
+    return res;
+  },
+
+  setPosition: function(state) {
+    var dom = this.dom;
+    dom.style.top = state.top;
+    dom.style.left = state.left;
+  },
+
+  hide: function() {
+  this.dom.style.display = 'none';
+    this.emit('hide');
+  },
+
+  show: function() {
+  this.dom.style.display = 'block';
+    this.emit('show');
   }
 };
+mixin(DraggableMixin, Jvent.prototype);
 
 function SearchView(parentDom, state) {
+  // Yeah, global object. Hate this, but let's do it for now.
+  window.searchView = this;
+
   var self = this;
   this.parentDom = parentDom;
 
@@ -214,12 +247,89 @@ function SearchView(parentDom, state) {
 
   var editorDom = dom.querySelector('.searchUI-editor');
   var editor = this.editor = CodeMirror(editorDom, {
+    readOnly: true,
     extraKeys: {
       "Cmd-D": function(cm) {
         self.close();
+      },
+
+      "Esc": function(cm) {
+        if (self === window.searchView) {
+          self.hide();
+        } else {
+          self.close();
+        }
       }
     }
   });
+
+  this.editorView = null;
+  this.$resetEditorView = this.resetEditorView.bind(this);
+
+  this.on('dragging', function(event) {
+    var editorView = self.editorView;
+    if (!editorView) return;
+
+    editorView.setPosition(self.getPositionOnRight());
+  });
+
+  this.on('hide', function() {
+    if (self.editorView) {
+      self.editorView.hide();
+    }
+  });
+
+  this.on('show', function() {
+    if (self.editorView) {
+      self.editorView.show();
+    }
+  });
+
+  // On every cursor update, sync the editor on the right.
+  var editorCursorActivity = function editorCursorActivity(cm) {
+    var selections = editor.listSelections();
+    if (selections.length == 0) return;
+
+    var sel = selections[0];
+    var lines = editor.getValue().split('\n');
+    var lineIdx = sel.head.line;
+
+    var lineNum = lines[lineIdx].match(/^\s*\d+/);
+    if (!lineNum) return;
+    lineNum = parseInt(lineNum, 10);
+
+    // TODO: Remove unix path hack here. Windows paths don't start with
+    // an '/' character!
+    while (lineIdx > 0 && lines[lineIdx].indexOf('/') !== 0) {
+      lineIdx --;
+    }
+    // In case no file could be found, just return.
+    if (lineIdx === -1) return;
+
+    var editorState = mixin({
+      filePath: lines[lineIdx],
+      cursor: { line: lineNum, ch: 9 }
+    }, self.getPositionOnRight() /* from DraggableMixin */);
+
+    if (!self.editorView) {
+    self.editorView = new EditorView(parentDom, editorState /* defaultState */);
+      // As soon as the editor view is dragged, make it become "independent".
+      // TODO: Add a visual feedback about the binding and unbinding.
+      self.editorView.
+        on('startDragging', self.$resetEditorView).
+        on('close', self.$resetEditorView);
+    } else {
+    self.editorView.setState(editorState);
+    }
+  }
+
+  // Old version: Update the view on every cursor change. Turned out to be
+  // too unexpected. Double click gives more control when to update.
+  // editor.on('cursorActivity', _.debounce(editorCursorActivity, 250, {
+  //   leading: true,
+  //   trailing: true
+  // }));
+  editor.on('dblclick', editorCursorActivity);
 
   var cmdInput = this.cmdInput = dom.querySelector('.searchUI-cmd');
   var queryInput = this.queryInput = dom.querySelector('.searchUI-search');
@@ -229,7 +339,7 @@ function SearchView(parentDom, state) {
     }
   });
 
-  this.initDraggable();
+  this.initDraggable({ cancel: ".searchUI-editor, input"} /* draggableOptions */);
 
   this.setState(state || this.getDefaultState());
 
@@ -238,6 +348,17 @@ function SearchView(parentDom, state) {
 }
 
 mixin(SearchView.prototype, DraggableMixin);
+
+SearchView.prototype.focus = function() {
+  this.queryInput.focus();
+}
+
+SearchView.prototype.resetEditorView = function() {
+  if (this.editorView) {
+    this.editorView.offListener(this.$resetEditorView);
+    this.editorView = null;
+  }
+}
 
 SearchView.prototype.exec = function() {
   var options = {};
@@ -253,8 +374,15 @@ SearchView.prototype.exec = function() {
   $.post('/exec', JSON.stringify({
     cmd: cmd,
     options: options
-  }), function(content) {
+  })).then(function(content) {
+    if (cmd.indexOf('ag') === 0) {
+      content = self.formatResponse(options.cwd || '', content);
+    }
     self.editor.setValue(content);
+  }, function(xhr) {
+    self.editor.setValue(
+      'There was an error while executing the command:\n\n' +
+      '  ' + xhr.responseText);
   });
 }
 
@@ -265,6 +393,49 @@ SearchView.prototype.getDefaultState = function() {
   res.cmd = 'ag -A 3 -B 3  -i $0 @ ' + stateManager.stateFilePath;
   res.query = 'HelloWorld';
   return res;
+}
+
+SearchView.prototype.formatResponse = function(cwd, res) {
+  var lines = res.split('\n').filter(function(line) {
+    return line.length > 0;
+  });
+
+  var out = [];
+  var lastFile = '';
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var fileName = line.match(/^(.*?):/)[1];
+
+    if (lastFile !== fileName) {
+      if (i !== 0) {
+        out.push('');
+      }
+      out.push(cwd + fileName);
+    }
+    var line = line.substring(fileName.length + 1);
+    var lineNumber = line.match(/\d+/)[0];
+    var line = line.substring(lineNumber.length);
+    if (line[0] === '-') {
+      line = '  ' + line.substring(1);
+    } else {
+      line = ': ' + line.substring(1);
+    }
+
+    lineNumber = parseInt(lineNumber, 10);
+
+    if (lineNumber < 10) {
+      lineNumber = '   ' + lineNumber;
+    } else if (lineNumber < 100) {
+      lineNumber = '  ' + lineNumber;
+    } else if (lineNumber < 1000) {
+      lineNumber = ' ' + lineNumber;
+    }
+
+    out.push(lineNumber + line);
+
+    lastFile = fileName;
+  }
+  return out.join('\n');
 }
 
 SearchView.prototype.getState = function() {
@@ -281,6 +452,9 @@ SearchView.prototype.setState = function(state) {
 }
 
 SearchView.prototype.close = function() {
+  this.emit('close');
+  this.removeEverything();
+  this.resetEditorView();
   this.parentDom.removeChild(this.dom);
   stateManager.removeView(this);
 }
@@ -313,6 +487,10 @@ function EditorView(parentDom, state) {
         self.close();
       },
 
+      "Esc": function(cm) {
+        self.close();
+      },
+
       "Cmd-S": function(cm) {
         docManager.saveAll();
         stateManager.save();
@@ -323,7 +501,12 @@ function EditorView(parentDom, state) {
       },
 
       "Shift-Cmd-F": function(cm) {
-        new SearchView(parentDom);
+        if (!searchView) {
+          new SearchView(parentDom);
+        } else {
+          searchView.show();
+          searchView.focus();
+        }
       },
 
       "Ctrl-L": function(cm) {
@@ -350,7 +533,8 @@ function EditorView(parentDom, state) {
   if (state) this.setState(state);
 
     // Init the mixins.
-  this.initDraggable(this.layout.bind(this) /* onResize */);
+  this.initDraggable({ cancel: "pre"} /* draggableOptions */);
+  this.on('resize', this.layout.bind(this));
 
   stateManager.addView(this);
 }
@@ -366,6 +550,8 @@ EditorView.prototype.focus = function() {
 }
 
 EditorView.prototype.close = function() {
+  this.emit('close');
+  this.removeEverything();
   this.parentDom.removeChild(this.dom);
   stateManager.removeView(this);
 }
@@ -378,7 +564,7 @@ EditorView.prototype.getState = function() {
   var filePath = this.getFilePath();
 
   if (!filePath) {
-   	return;
+    return;
   }
 
   var res = { type: 'EditorView' };
@@ -394,12 +580,23 @@ EditorView.prototype.getState = function() {
 }
 
 EditorView.prototype.showFile = function(filePath, options) {
+  // Nothing todo if the file to show stayed the same ;)
+  if (this.docPromise && this.docPromise.filePath === filePath) {
+    this.emit('showFile', filePath);
+    return this.docPromise;
+  }
+
   var self = this;
-  return docManager.get(filePath, options).then(function(doc) {
-    self.editor.swapDoc(doc);
-  }, function() {
-    self.editor.setValue('Failed to get the file. Closing view again.')
-  });
+  this.docPromise = docManager.get(filePath, options).
+    then(function(doc) {
+      self.editor.swapDoc(doc);
+      self.emit('showFile', filePath);
+    }, function() {
+      self.editor.setValue('Failed to get the file. Closing view again.')
+      self.emit('showFile', filePath);
+    });
+  this.docPromise.filePath = filePath;
+  return this.docPromise;
 }
 
 EditorView.prototype.setState = function(state) {
@@ -410,9 +607,21 @@ EditorView.prototype.setState = function(state) {
 
   this.fileOptions = state.fileOptions;
   this.showFile(state.filePath, state.fileOptions).then(function() {
-    // Set the scroll position only after the file is loaded, such that the
+    // Once the file is loaded and shown in the editor, either set the cursor
+    // position or the selection as set on the state.
+    if (state.cursor) {
+      var cursorScrollMargin = self.editor.options.cursorScrollMargin;
+      // Set the cursor position and scroll the line into the middle
+      // of the editor view.
+      self.editor.setCursor(state.cursor);
+      var top = self.editor.charCoords(state.cursor, "local").top;
+      var halfHeight = self.editor.getScrollerElement().offsetHeight / 2;
+      self.editor.scrollTo(null, top - halfHeight - 5);
+    } else {
+      // Set the scroll position only after the file is loaded, such that the
     // scrollIntoView will apply to the loaded file.
-    self.editor.scrollTo(state.scrollX, state.scrollY);
+      self.editor.scrollTo(state.scrollX, state.scrollY);
+    }
   });
 }
 
@@ -475,7 +684,8 @@ function onLoad() {
     return;
   }
 
-  stateManager = new StateManager(stateFile);
+  window.stateManager = new StateManager(stateFile);
+  window.searchView = null;
 
   var editorContainer = document.getElementById('editorContainer');
   editorContainer.addEventListener('dblclick', function(ev) {
@@ -486,10 +696,10 @@ function onLoad() {
     ev.stopPropagation();
     return false;
   });
-  
-  setInterval(function() {
+
+/*  setInterval(function() {
     stateManager.save();
-  }, 5000);
+  }, 5000); */
 }
 
 
