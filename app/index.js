@@ -697,9 +697,9 @@ function onLoad() {
     return false;
   });
 
-/*  setInterval(function() {
+  setInterval(function() {
     stateManager.save();
-  }, 5000); */
+  }, 5000);
 }
 
 
