@@ -319,7 +319,7 @@ function SearchView(parentDom, state) {
         on('startDragging', self.$resetEditorView).
         on('close', self.$resetEditorView);
     } else {
-    self.editorView.setState(editorState);
+      self.editorView.setState(editorState);
     }
   }
 
@@ -363,6 +363,7 @@ SearchView.prototype.resetEditorView = function() {
 SearchView.prototype.exec = function() {
   var options = {};
   var query = this.queryInput.value;
+  query = '"' + query.replace(/"/g, '\\"') + '"';
   var cmdRaw = this.cmdInput.value;
   var cwd = cmdRaw.split('@')[1];
   var cmd = cmdRaw.split('@')[0].trim().replace('$0', query);
@@ -390,7 +391,11 @@ SearchView.prototype.getDefaultState = function() {
   var res = { type: 'SearchView' };
 
   this.getStateDraggable(res);
-  res.cmd = 'ag -A 3 -B 3  -i $0 @ ' + stateManager.stateFilePath;
+  // TODO: Add proper OS-path parsing here to remove the file from the
+  // path name.
+  var paths = stateManager.stateFilePath.split('/');
+  paths.pop();
+  res.cmd = 'ag -A 3 -B 3 -Q -i $0 @ ' + paths.join('/');
   res.query = 'HelloWorld';
   return res;
 }
