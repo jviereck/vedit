@@ -60,6 +60,12 @@ function StateManager(stateFilePath) {
   }
 }
 
+StateManager.prototype.getDefaultSettings = function() {
+  return {
+    tab_size: 4
+  };
+}
+
 StateManager.prototype.addView = function(view) {
   if (this.appliesStateFile) return;
 
@@ -77,7 +83,7 @@ StateManager.prototype.setStateFilePath = function(stateFilePath) {
 }
 
 StateManager.prototype.applyState = function(state) {
-  this.stateFilePath = state.stateFilePath;
+  this.settings = state.settings || this.getDefaultSettings();
   this.views = state.views.map(function(viewState) {
     var editorContainer = document.getElementById('editorContainer');
     if (viewState.type == 'EditorView') {
@@ -101,12 +107,11 @@ StateManager.prototype.save = function() {
   if (this.appliesStateFile) return;
 
   var state = JSON.stringify({
-    stateFilePath: this.stateFilePath,
+    settings: this.settings || this.getDefaultSettings(),
     views: _.compact(this.views.map(function(view) {
       return view.getState();
     }))
   }, null, 2);
-  localStorage.setItem('lastState', state);
   if (this.stateFilePath) {
     fs.set(this.stateFilePath, state);
   }
@@ -121,7 +126,10 @@ function DocManager() {
     rs: 'rust',
     html: 'htmlmixed',
     xml: 'xml',
-    css: 'css'
+    css: 'css',
+    cpp: 'text/x-c++src',
+    h: 'text/x-c++hdr',
+    c: 'text/x-csrc'
   }
 }
 
@@ -339,8 +347,9 @@ function SearchView(parentDom, state) {
     }
   });
 
-  this.initDraggable({ cancel: ".searchUI-editor, input"} /* draggableOptions */);
 
+  this.initDraggable({ cancel: ".searchUI-editor, input"} /* draggableOptions */);
+  
   this.setState(state || this.getDefaultState());
 
   stateManager.addView(this);
@@ -466,6 +475,7 @@ SearchView.prototype.close = function() {
 
 function EditorView(parentDom, state) {
   var self = this;
+  this.settings = {};
   this.parentDom = parentDom;
 
   var dom = this.dom = document.createElement('div');
@@ -526,8 +536,6 @@ function EditorView(parentDom, state) {
           var t = to; to = from; from = t;
         }
 
-        self.fileOptions = {from: from, to: to};
-
         var linkedDoc = editor.getDoc().linkedDoc({from: from, to:to});
         linkedDoc.filePath = editor.getDoc().filePath;
         editor.swapDoc(linkedDoc);
@@ -577,7 +585,7 @@ EditorView.prototype.getState = function() {
   var dom = this.dom;
 
   this.getStateDraggable(res);
-  res.fileOptions = this.fileOptions;
+  res.settings = this.settings;
   res.filePath = filePath;
   res.scrollX = scrollInfo.left;
   res.scrollY = scrollInfo.top;
@@ -610,7 +618,9 @@ EditorView.prototype.setState = function(state) {
 
   this.setStateDraggable(state);
 
-  this.fileOptions = state.fileOptions;
+  var settings = this.settings = mixin(state.settings || {}, stateManager.settings);
+  this.editor.setOption('tabSize', settings.tab_size);
+
   this.showFile(state.filePath, state.fileOptions).then(function() {
     // Once the file is loaded and shown in the editor, either set the cursor
     // position or the selection as set on the state.
