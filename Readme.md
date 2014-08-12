@@ -61,6 +61,7 @@ There are not many features yet. Here is what is possible:
 - there is a project wide search (well, actually there is something that executes
   a command on your command line and shows you the result... see more below)
 
+Notes showing what might come next are availabe in the [notes.txt](notes.txt) file.
 
 ## Key combinations for the editor
 
