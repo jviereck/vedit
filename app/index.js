@@ -37,17 +37,28 @@ function StateManager(stateFilePath) {
 
   var self = this;
   fs.get(stateFilePath).then(function(content) {
-    self.applyState(JSON.parse(content));
-    self.appliesStateFile = false;
+    var state = {};
+    try {
+      state = JSON.parse(content);
+    } catch (e) {
+      alert('Seems like the stateFile is corrupted. Will reset it.');
+    }
+    return state;
   }, function(error) {
-    alert('Could not load the state file. Sure there is one?');
-    this.appliesStateFile = false;
+    alert('Failed to open the specified state file. Will create a new one there.');
+    return {};
+  }).then(function(state) {
+    self.applyState(state);
+    self.appliesStateFile = false;
   });
 }
 
-StateManager.prototype.getDefaultSettings = function() {
+StateManager.prototype.getDefaultState = function() {
   return {
-    tab_size: 4
+    settings: {
+      tab_size: 4,
+    },
+    views: []
   };
 }
 
@@ -68,7 +79,8 @@ StateManager.prototype.setStateFilePath = function(stateFilePath) {
 }
 
 StateManager.prototype.applyState = function(state) {
-  this.settings = state.settings || this.getDefaultSettings();
+  state = mixin(this.getDefaultState(), state);
+  this.settings = state.settings;
   this.views = state.views.map(function(viewState) {
     var editorContainer = document.getElementById('editorContainer');
     if (viewState.type == 'EditorView') {
@@ -180,10 +192,10 @@ var DraggableMixin = {
         grid: kGRID,
         resize: function(event, ui) { self.emit('resize', event, ui); }
       });
-    
+
     this.dom.addEventListener('keydown', function(evt) {
       if (evt.keyCode == 27 /* ESC */) {
-		    self.emit('key-esc');
+        self.emit('key-esc');
       }
     });
   },
@@ -212,7 +224,7 @@ var DraggableMixin = {
     res.left = 'calc(' + state.left + ' + ' + state.width + ' + ' + kGRID + 'px)';
     return res;
   },
-  
+
   getPositionInset: function() {
     var res = {};
     var state = {};
@@ -229,16 +241,16 @@ var DraggableMixin = {
   },
 
   hide: function() {
-	  this.dom.style.display = 'none';
+    this.dom.style.display = 'none';
     this.emit('hide');
   },
-  
+
   isHidden: function() {
     return this.dom.style.display === 'none';
   },
 
   show: function() {
-  	this.dom.style.display = 'block';
+    this.dom.style.display = 'block';
     this.emit('show');
   }
 };
@@ -267,7 +279,7 @@ function SearchView(parentDom, state) {
     // panel is reopened later again.
     self.hide();
   });
-  
+
   this.on('dragging', function(event) {
     var editorView = self.editorView;
     if (!editorView) return;
@@ -453,7 +465,7 @@ SearchView.prototype.setState = function(state) {
   this.cmdInput.value = state.cmd;
   this.queryInput.value = state.query;
   if (state.isHidden) {
-   	this.hide(); 
+    this.hide();
   }
 }
 
@@ -482,8 +494,8 @@ function EditorView(parentDom, state) {
   dom.addEventListener('dblclick', function(ev) {
     ev.stopPropagation();
   })
-  
-	this.on('key-esc', function() {
+
+  this.on('key-esc', function() {
     self.close();
   });
 
@@ -669,7 +681,7 @@ function onLoad() {
   }
 
   var editorContainer = document.getElementById('editorContainer');
-  
+
   window.stateManager = new StateManager(stateFile);
   stateManager.searchView = new SearchView(editorContainer);
   stateManager.searchView.hide();
