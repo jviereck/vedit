@@ -35,29 +35,14 @@ function StateManager(stateFilePath) {
   this.allowSave = true;
   this.appliesStateFile = true;
 
-  if (!stateFilePath) {
-    var lastState = localStorage.getItem('lastState');
-    if (lastState && lastState.stateFilePath) {
-      // Set the `stateFilePath` variable here if there is none passed to the
-      this.stateFilePath = stateFilePath = lastState.stateFilePath;
-    } else if (lastState) {
-      this.applyState(JSON.parse(lastState));
-      return;
-    }
-  }
-
-  if (stateFilePath) {
-    var self = this;
-    fs.get(stateFilePath).then(function(content) {
-      self.applyState(JSON.parse(content));
-      self.appliesStateFile = false;
-    }, function(error) {
-      alert('Could not load the state file. Sure there is one?');
-      this.appliesStateFile = false;
-    });
-  } else {
+  var self = this;
+  fs.get(stateFilePath).then(function(content) {
+    self.applyState(JSON.parse(content));
+    self.appliesStateFile = false;
+  }, function(error) {
+    alert('Could not load the state file. Sure there is one?');
     this.appliesStateFile = false;
-  }
+  });
 }
 
 StateManager.prototype.getDefaultSettings = function() {
@@ -195,6 +180,12 @@ var DraggableMixin = {
         grid: kGRID,
         resize: function(event, ui) { self.emit('resize', event, ui); }
       });
+    
+    this.dom.addEventListener('keydown', function(evt) {
+      if (evt.keyCode == 27 /* ESC */) {
+		    self.emit('key-esc');
+      }
+    });
   },
 
   getStateDraggable: function(state) {
@@ -221,6 +212,15 @@ var DraggableMixin = {
     res.left = 'calc(' + state.left + ' + ' + state.width + ' + ' + kGRID + 'px)';
     return res;
   },
+  
+  getPositionInset: function() {
+    var res = {};
+    var state = {};
+    this.getStateDraggable(state);
+    res.top = 'calc(' + state.top + ' + 2 * ' + kGRID + 'px)';
+    res.left = 'calc(' + state.left + ' + 2 * ' + kGRID + 'px)';
+    return res;
+  },
 
   setPosition: function(state) {
     var dom = this.dom;
@@ -229,21 +229,22 @@ var DraggableMixin = {
   },
 
   hide: function() {
-  this.dom.style.display = 'none';
+	  this.dom.style.display = 'none';
     this.emit('hide');
+  },
+  
+  isHidden: function() {
+    return this.dom.style.display === 'none';
   },
 
   show: function() {
-  this.dom.style.display = 'block';
+  	this.dom.style.display = 'block';
     this.emit('show');
   }
 };
 mixin(DraggableMixin, Jvent.prototype);
 
 function SearchView(parentDom, state) {
-  // Yeah, global object. Hate this, but let's do it for now.
-  window.searchView = this;
-
   var self = this;
   this.parentDom = parentDom;
 
@@ -255,25 +256,18 @@ function SearchView(parentDom, state) {
 
   var editorDom = dom.querySelector('.searchUI-editor');
   var editor = this.editor = CodeMirror(editorDom, {
-    readOnly: true,
-    extraKeys: {
-      "Cmd-D": function(cm) {
-        self.close();
-      },
-
-      "Esc": function(cm) {
-        if (self === window.searchView) {
-          self.hide();
-        } else {
-          self.close();
-        }
-      }
-    }
+    readOnly: true
   });
 
   this.editorView = null;
   this.$resetEditorView = this.resetEditorView.bind(this);
 
+  this.on('key-esc', function() {
+    // Only hide and not close, such that the state is still there when the
+    // panel is reopened later again.
+    self.hide();
+  });
+  
   this.on('dragging', function(event) {
     var editorView = self.editorView;
     if (!editorView) return;
@@ -331,12 +325,6 @@ function SearchView(parentDom, state) {
     }
   }
 
-  // Old version: Update the view on every cursor change. Turned out to be
-  // too unexpected. Double click gives more control when to update.
-  // editor.on('cursorActivity', _.debounce(editorCursorActivity, 250, {
-  //   leading: true,
-  //   trailing: true
-  // }));
   editor.on('dblclick', editorCursorActivity);
 
   var cmdInput = this.cmdInput = dom.querySelector('.searchUI-cmd');
@@ -349,7 +337,7 @@ function SearchView(parentDom, state) {
 
 
   this.initDraggable({ cancel: ".searchUI-editor, input"} /* draggableOptions */);
-  
+
   this.setState(state || this.getDefaultState());
 
   stateManager.addView(this);
@@ -456,6 +444,7 @@ SearchView.prototype.getState = function() {
   var res = this.getDefaultState();
   res.cmd = this.cmdInput.value;
   res.query = this.queryInput.value;
+  res.isHidden = this.isHidden();
   return res;
 }
 
@@ -463,6 +452,9 @@ SearchView.prototype.setState = function(state) {
   this.setStateDraggable(state);
   this.cmdInput.value = state.cmd;
   this.queryInput.value = state.query;
+  if (state.isHidden) {
+   	this.hide(); 
+  }
 }
 
 SearchView.prototype.close = function() {
@@ -490,6 +482,10 @@ function EditorView(parentDom, state) {
   dom.addEventListener('dblclick', function(ev) {
     ev.stopPropagation();
   })
+  
+	this.on('key-esc', function() {
+    self.close();
+  });
 
   var editor = this.editor = CodeMirror(editorDom, {
     lineWrapping: false,
@@ -498,54 +494,27 @@ function EditorView(parentDom, state) {
     indentWithTabs: false,
     rulers: [{color: '#ddd', column: 80, lineStyle: 'dashed'}],
     extraKeys: {
-      "Cmd-D": function(cm) {
-        self.close();
-      },
-
-      "Esc": function(cm) {
-        self.close();
-      },
-
       "Cmd-S": function(cm) {
         docManager.saveAll();
         stateManager.save();
       },
 
       "Ctrl-F": function(cm) {
-        createNewView(null, editor.getDoc().filePath);
+        new EditorView(
+            parentDom, mixin(self.getState(), self.getPositionOnRight()));
       },
 
       "Shift-Cmd-F": function(cm) {
-        if (!searchView) {
-          new SearchView(parentDom);
-        } else {
-          searchView.show();
-          searchView.focus();
-        }
-      },
-
-      "Ctrl-L": function(cm) {
-        var selections = editor.listSelections();
-        if (selections.length == 0) {
-          alert('Please select a chunk of lines.');
-          return;
-        }
-        var from = selections[0].head.line;
-        var to = selections[0].anchor.line;
-        if (to < from) {
-          var t = to; to = from; from = t;
-        }
-
-        var linkedDoc = editor.getDoc().linkedDoc({from: from, to:to});
-        linkedDoc.filePath = editor.getDoc().filePath;
-        editor.swapDoc(linkedDoc);
+        stateManager.searchView.show();
+        stateManager.searchView.focus();
+        stateManager.searchView.setPosition(self.getPositionInset());
       }
     }
   });
 
   if (state) this.setState(state);
 
-    // Init the mixins.
+  // Init the mixins.
   this.initDraggable({ cancel: "pre"} /* draggableOptions */);
   this.on('resize', this.layout.bind(this));
 
@@ -699,10 +668,12 @@ function onLoad() {
     return;
   }
 
-  window.stateManager = new StateManager(stateFile);
-  window.searchView = null;
-
   var editorContainer = document.getElementById('editorContainer');
+  
+  window.stateManager = new StateManager(stateFile);
+  stateManager.searchView = new SearchView(editorContainer);
+  stateManager.searchView.hide();
+
   editorContainer.addEventListener('dblclick', function(ev) {
     if (ev.target !== editorContainer) return;
 
@@ -712,6 +683,7 @@ function onLoad() {
     return false;
   });
 
+  // Save the current editor state every 5 sec.
   setInterval(function() {
     stateManager.save();
   }, 5000);

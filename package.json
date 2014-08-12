@@ -1,0 +1,17 @@
+{
+  "name": "vedit",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:jviereck/vedit.git"
+  },
+  "dependencies": {
+    "exec": "0.1.2",
+    "express": "4.7.2"
+  },
+  "scripts": {
+    "serve": "node server.js"
+  },
+  "author": "'Juilan Viereck' <julian.viereck@gmail.com>",
+  "license": "MIT"
+}
