@@ -64,11 +64,11 @@ There are not many features yet. Here is what is possible:
 
 ## Key combinations for the editor
 
-Key | Action
-------------
-ESC | closes the panel
-Cmd-S | saves ALL files that were changed
-Ctrl-F | forks the current editor view - opens a new view into the same file
+Key         | Action
+------------|----------------------
+ESC         | closes the panel
+Cmd-S       | saves ALL files that were changed
+Ctrl-F      | forks the current editor view - opens a new view into the same file
 Shift-Cmd-F | opens the search panel
 
 ## Cross-Project search
