@@ -1,6 +1,6 @@
 # vEdit
 
-A new code editor - different by behavior.
+A new code editor - different by behaviour.
 
 ## Status
 
