@@ -332,6 +332,7 @@ var DraggableMixin = {
 
   show: function() {
     this.dom.style.display = 'block';
+    stateManager.bringToFront(this);
     this.emit('show');
   },
 
@@ -381,6 +382,8 @@ function SearchView(parentDom, state) {
     if (self.editorView) {
       self.editorView.show();
     }
+    self.queryInput.select();
+    self.queryInput.focus();
   });
 
   // On every cursor update, sync the editor on the right.
@@ -783,6 +786,10 @@ function HeadsUpPanel(parentDom, state) {
   this.inputDom = dom.querySelector('.headsUp-input');
   this.listDom = dom.querySelector('.headsUp-list');
 
+  this.on('show', function() {
+    self.inputDom.focus();
+  });
+  
   // Debounced version of the default keydown handling.
   var keydownHandling = _.debounce(function(evt) {
     if (evt.keyCode == 38) {
@@ -971,14 +978,13 @@ function onLoad() {
         stateManager.headsUpPanel.show();
         evt.preventDefault();
         evt.stopPropagation();
-      } else if (evt.keyCode == 70 /* F */) {
+      } else if (evt.keyCode == 70 /* F */ && evt.shiftKey) {
         stateManager.searchView.show();
-        stateManager.searchView.focus();
         evt.preventDefault();
         evt.stopPropagation();
       }
     }
-  });
+  }, true);
 
   editorContainer.addEventListener('dblclick', function(ev) {
     if (ev.target !== editorContainer) return;
