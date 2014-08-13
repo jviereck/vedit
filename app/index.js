@@ -64,6 +64,12 @@ StateManager.prototype.getDefaultState = function() {
   };
 }
 
+StateManager.prototype.getPanels = function(type) {
+  return this.views.filter(function(view) {
+    return view.type === type;
+  });
+}
+
 StateManager.prototype.addView = function(view) {
   if (this.appliesStateFile) return;
 
@@ -621,6 +627,25 @@ function EditorView(parentDom, state) {
         stateManager.searchView.show();
         stateManager.searchView.focus();
         stateManager.searchView.setPosition(self.getPositionInset());
+      },
+
+      "Ctrl-T": function(cm) {
+        var selections = cm.listSelections();
+        selections.forEach(function(selection) {
+          var from = selection.head;
+          var to = selection.anchor;
+          if (from.line > to.line || from.ch > to.ch) {
+           	var t = from;
+            from = to; to = t;
+          }
+          var widget = document.createElement('span');
+          widget.textContent = '→'
+          cm.markText(from, to, {
+            replaceWith: widget,
+            clearOnEnter: true,
+            __isFold: true
+          });
+        });
       }
     }
   });
@@ -789,7 +814,7 @@ function HeadsUpPanel(parentDom, state) {
   this.on('show', function() {
     self.inputDom.focus();
   });
-  
+
   // Debounced version of the default keydown handling.
   var keydownHandling = _.debounce(function(evt) {
     if (evt.keyCode == 38) {
