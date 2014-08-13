@@ -34,6 +34,7 @@ function StateManager(stateFilePath) {
   this.views = [];
   this.allowSave = true;
   this.appliesStateFile = true;
+  this.dom = document.getElementById('editorContainer');
 
   var self = this;
   fs.get(stateFilePath).then(function(content) {
@@ -82,13 +83,12 @@ StateManager.prototype.applyState = function(state) {
   state = mixin(this.getDefaultState(), state);
   this.settings = state.settings;
   this.views = state.views.map(function(viewState) {
-    var editorContainer = document.getElementById('editorContainer');
     if (viewState.type == 'EditorView') {
-      return new EditorView(editorContainer, viewState);
+      return new EditorView(this.dom, viewState);
     } else if (viewState.type == 'SearchView') {
-      return new SearchView(editorContainer, viewState);
+      return new SearchView(this.dom, viewState);
     }
-  });
+  }, this);
 }
 
 StateManager.prototype.close = function() {
@@ -111,6 +111,20 @@ StateManager.prototype.save = function() {
   }, null, 2);
   if (this.stateFilePath) {
     fs.set(this.stateFilePath, state);
+  }
+}
+
+StateManager.prototype.bringToFront = function(panel) {
+  if (panel.dom !== this.dom.lastChild) {
+    // Update the dom.
+    this.dom.removeChild(panel.dom);
+    this.dom.appendChild(panel.dom);
+    panel.layout();
+
+    // Update also the list of the panels in the state array, such that the
+    // panels show up in the new order the next time the stateFile is loaded.
+    this.views.slice(this.views.indexOf(panel), 1);
+    this.views.push(panel);
   }
 }
 
@@ -197,6 +211,10 @@ var DraggableMixin = {
       if (evt.keyCode == 27 /* ESC */) {
         self.emit('key-esc');
       }
+    });
+
+    this.dom.addEventListener('mousedown', function(evt) {
+      stateManager.bringToFront(self);
     });
   },
 
@@ -475,6 +493,10 @@ SearchView.prototype.close = function() {
   this.resetEditorView();
   this.parentDom.removeChild(this.dom);
   stateManager.removeView(this);
+}
+
+SearchView.prototype.layout = function() {
+  this.editor.refresh();
 }
 
 function EditorView(parentDom, state) {
