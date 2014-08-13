@@ -11,7 +11,7 @@ html {
 }
 
 #editorContainer {
-  position: absolute;
+  position: absolute !important;
   height: 100%;
   width: 100%;
 }
@@ -23,15 +23,52 @@ html {
   z-index: 4;
 }
 
+.headsUp-panel {
+  top: 100px;
+  width: 450px;
+  height: 400px;
+  position: absolute !important;
+  z-index: 4;
+}
+
+.headsUp-input {
+  width: calc(100% - 8px);
+  font-size: 22px;
+}
+
+.headsUp-list {
+  height: 351px;
+  list-style-type: none;
+  border: 1px solid gray;
+  overflow: scroll;
+  margin: 0;
+  padding: 0;
+  margin-top: 10px;
+}
+
+.headsUp-filename {
+  font-weight: bold;
+}
+
+.headsUp-list-item {
+  padding: 5px;
+  padding-left: 15px;
+  background: white;
+}
+
+.headsUp-list-item.selected {
+  background: #F0E895;
+}
+
 .searchUI-view {
-  position: absolute;
+  position: absolute !important;
   width: 500px;
   height: 500px;
   z-index: 9999;
 }
 
 .searchUI-args, .searchUI-cmd, .searchUI-search {
-  width: calc(100% - 10px); 
+  width: calc(100% - 8px);
 }
 
 .searchUI-table {

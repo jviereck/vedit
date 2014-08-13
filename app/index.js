@@ -37,7 +37,7 @@ function StateManager(stateFilePath) {
   this.dom = document.getElementById('editorContainer');
 
   var self = this;
-  fs.get(stateFilePath).then(function(content) {
+  this.initPromise = fs.get(stateFilePath).then(function(content) {
     var state = {};
     try {
       state = JSON.parse(content);
@@ -51,6 +51,7 @@ function StateManager(stateFilePath) {
   }).then(function(state) {
     self.applyState(state);
     self.appliesStateFile = false;
+    return state;
   });
 }
 
@@ -87,6 +88,10 @@ StateManager.prototype.applyState = function(state) {
       return new EditorView(this.dom, viewState);
     } else if (viewState.type == 'SearchView') {
       return new SearchView(this.dom, viewState);
+    } else if (viewState.type == 'HeadsUpPanel') {
+      return new HeadsUpPanel(this.dom, viewState);
+    } else {
+      alert('Got unkown type of panel: ' + viewState.type);
     }
   }, this);
 }
@@ -123,7 +128,7 @@ StateManager.prototype.bringToFront = function(panel) {
 
     // Update also the list of the panels in the state array, such that the
     // panels show up in the new order the next time the stateFile is loaded.
-    this.views.slice(this.views.indexOf(panel), 1);
+    this.views.splice(this.views.indexOf(panel), 1);
     this.views.push(panel);
   }
 }
@@ -192,6 +197,43 @@ var mixin = function(a, b) {
   return a;
 }
 
+function snap(diff) {
+  return Math.floor(diff / kGRID) * kGRID;
+}
+
+var smartMovePanel = null;
+var mouseStartPos = null;
+var domPos = {};
+var onlyCmdDown = false;
+
+function resetSmartDragging() {
+  onlyCmdDown = false;
+  mouseStartPos = null;
+  smartMovePanel = null;
+}
+
+window.addEventListener('keydown', function(evt) {
+  if (evt.keyCode == 91 && evt.metaKey) {
+    onlyCmdDown = true;
+  } else {
+    resetSmartDragging();
+  }
+});
+window.addEventListener('keyup', resetSmartDragging);
+window.addEventListener('click', resetSmartDragging);
+
+window.addEventListener('mousemove', function(evt) {
+  if (smartMovePanel) {
+    var diffX = snap(evt.clientX - mouseStartPos.x);
+    var diffY = snap(evt.clientY - mouseStartPos.y);
+
+    smartMovePanel.setPosition({
+      left: 'calc(' + domPos.left + ' + ' + diffX + 'px)',
+      top:  'calc(' + domPos.top  + ' + ' + diffY + 'px)'
+    });
+  }
+});
+
 var DraggableMixin = {
   initDraggable: function(draggableOptions) {
     var self = this;
@@ -210,6 +252,22 @@ var DraggableMixin = {
     this.dom.addEventListener('keydown', function(evt) {
       if (evt.keyCode == 27 /* ESC */) {
         self.emit('key-esc');
+      }
+    });
+
+    this.dom.addEventListener('mousemove', function(evt) {
+      if (onlyCmdDown) {
+        if (mouseStartPos == null) {
+          mouseStartPos = { x: evt.pageX, y: evt.pageY };
+          domPos = self.getPosition();
+        } else if (smartMovePanel == null) {
+          var diffX = snap(evt.clientX - mouseStartPos.x);
+          var diffY = snap(evt.clientY - mouseStartPos.y);
+          if (diffX * diffX + diffY * diffY > 4 * kGRID * kGRID) {
+            smartMovePanel = self;
+            mouseStartPos = { x: evt.pageX, y: evt.pageY };
+          }
+        }
       }
     });
 
@@ -258,6 +316,11 @@ var DraggableMixin = {
     dom.style.left = state.left;
   },
 
+  getPosition: function(state) {
+    var style = window.getComputedStyle(this.dom);
+    return { top: style.top, left: style.left };
+  },
+
   hide: function() {
     this.dom.style.display = 'none';
     this.emit('hide');
@@ -270,13 +333,16 @@ var DraggableMixin = {
   show: function() {
     this.dom.style.display = 'block';
     this.emit('show');
-  }
+  },
+
+  layout: function() { }
 };
 mixin(DraggableMixin, Jvent.prototype);
 
 function SearchView(parentDom, state) {
   var self = this;
   this.parentDom = parentDom;
+  this.type = 'SearchView';
 
   var dom = this.dom = document.createElement('div');
   dom.setAttribute('class', 'searchUI-view ui-widget-content draggable');
@@ -415,14 +481,10 @@ SearchView.prototype.exec = function() {
 }
 
 SearchView.prototype.getDefaultState = function() {
-  var res = { type: 'SearchView' };
+  var res = { type: this.type };
 
   this.getStateDraggable(res);
-  // TODO: Add proper OS-path parsing here to remove the file from the
-  // path name.
-  var paths = stateManager.stateFilePath.split('/');
-  paths.pop();
-  res.cmd = 'ag -A 3 -B 3 -Q -i $0 @ ' + paths.join('/');
+  res.cmd = 'ag -A 3 -B 3 -Q -i $0 @ ' + getProjectRoot();
   res.query = 'HelloWorld';
   return res;
 }
@@ -499,10 +561,24 @@ SearchView.prototype.layout = function() {
   this.editor.refresh();
 }
 
+// TODO: Add proper OS-path parsing here to remove the file from the
+// path name.
+function getProjectRoot() {
+  var paths = stateManager.stateFilePath.split('/');
+  paths.pop();
+  return paths.join('/')
+}
+
+function getFileName(path) {
+  var splits = path.split('/');
+  return splits[splits.length - 1];
+}
+
 function EditorView(parentDom, state) {
   var self = this;
   this.settings = {};
   this.parentDom = parentDom;
+  this.type = 'EditorView';
 
   var dom = this.dom = document.createElement('div');
   dom.setAttribute('class', 'draggable ui-widget-content editor-view');
@@ -583,7 +659,7 @@ EditorView.prototype.getState = function() {
     return;
   }
 
-  var res = { type: 'EditorView' };
+  var res = { type: this.type };
   var scrollInfo = this.editor.getScrollInfo();
   var dom = this.dom;
 
@@ -692,6 +768,171 @@ function parseLocationSearch() {
   return res;
 }
 
+function HeadsUpPanel(parentDom, state) {
+  var self = this;
+  this.parentDom = parentDom;
+  this.type = 'HeadsUpPanel';
+
+  var dom = this.dom = document.createElement('div');
+  dom.setAttribute('class', 'headsUp-panel ui-widget-content draggable');
+
+  var domTemplate = document.getElementById('headsUp-template');
+  dom.innerHTML = domTemplate.textContent;
+
+  this.selectedIdx = 0;
+  this.inputDom = dom.querySelector('.headsUp-input');
+  this.listDom = dom.querySelector('.headsUp-list');
+
+  // Debounced version of the default keydown handling.
+  var keydownHandling = _.debounce(function(evt) {
+    if (evt.keyCode == 38) {
+      self.selectedIdx -= 1;
+    } else if (evt.keyCode == 40) {
+      self.selectedIdx += 1;
+    } else if (evt.keyCode == 13) {
+      self.handleItemChoice(self.selectedIdx);
+    } else if (evt.keyCode == 27) {
+      self.hide();
+    } else if (evt.keyCode !== 37 && evt.keyCode !== 39) {
+      // If no arrow-key was pressed, then reset the index.
+      self.selectedIdx = 0;
+    }
+    self.updateList();
+  }, 33, {  maxWait: 33 });
+
+  // Adding the keydown event here. Need to prevent the down and right arrow
+  // key event immediately to prevent the cursor from moving to the left and
+  // right of the input field. Finally, call the debounde keydown handler.
+  this.inputDom.addEventListener('keydown', function(evt) {
+    if (evt.keyCode == 38 || evt.keyCode == 40) {
+      evt.preventDefault();
+    }
+    keydownHandling(evt);
+  });
+
+  this.inputDom.addEventListener('keyup', function(evt) {
+    self.updateList();
+  });
+
+  $(this.listDom).on('click', 'li', function() {
+    self.handleItemChoice(parseInt(this.getAttribute('data-id'), 10));
+  });
+
+  this.on('show', function() {
+    self.inputDom.value = '';
+    self.inputDom.focus();
+    self.updateFileListCache();
+  });
+
+  this.fileCache = [];
+  this.resultList = [];
+  this.updateFileListCache();
+
+  this.initDraggable({ cancel: ".headsUp-list, input"} /* draggableOptions */);
+  parentDom.appendChild(dom);
+
+  if (state) this.setState(state);
+  stateManager.addView(this);
+}
+
+mixin(HeadsUpPanel.prototype, DraggableMixin);
+
+HeadsUpPanel.prototype.handleItemChoice = function(index) {
+  var item = this.resultList[index];
+
+  if (!item) return;
+
+  var filePath = getProjectRoot() + '/' + item.substring(2);
+
+  // Open the file in a new EditorPanel.
+  new EditorView(stateManager.dom, { filePath: filePath });
+}
+
+HeadsUpPanel.prototype.updateFileListCache = function() {
+  var self = this;
+  var cwd = getProjectRoot();
+  $.post('/exec', JSON.stringify({
+    cmd: "find . -not -path '*/\.*'",
+    options: { cwd: cwd }
+  })).then(function(content) {
+    self.selectedIdx = 0;
+    self.fileCache = content.split('\n');
+    self.updateList();
+  });
+}
+
+HeadsUpPanel.prototype.updateList = function() {
+  var maxLength = 50;
+  var overSize = false;
+  this.listDom.textContent = '';
+
+  var query = this.inputDom.value.toLowerCase();
+  if (query === '') return;
+
+  // Compute the result list to show.
+  var results = this.fileCache.filter(function(entry) {
+    return entry.toLowerCase().indexOf(query) !== -1;
+  }).map(function(entry) {
+    var lastIndex = entry.toLowerCase().lastIndexOf(query);
+    return {
+      // Smaller score is better.
+      score: (entry.length - lastIndex) * entry.length,
+      entry: entry
+    };
+  }).sort(function(a, b) {
+    return a.score - b.score;
+  }).map(function(obj) { return obj.entry; });
+
+  if (results.length > maxLength) {
+    overSize = true;
+    results = results.slice(0, maxLength);
+  }
+
+  this.resultList = results;
+
+  // Restrict the index to a valid range.
+  this.selectedIdx = Math.min(Math.max(0, this.selectedIdx), results.length - 1);
+
+  this.listDom.innerHTML = results.map(function(path, index) {
+    var className = (this.selectedIdx === index) ? 'selected' : '';
+    var out = '<li class="headsUp-list-item ' + className + '" data-id="' + index + '">';
+    out += '<div class="headsUp-filename">' + getFileName(path) + '</div>';
+    out += '<div class="headsUp-path">' + path + '</div>';
+    out += '</li>';
+    return out;
+  }, this).join('');
+
+  if (overSize) {
+    this.listDom.innerHTML += '<li>And more files not shown...</li>';
+  }
+
+  // Scroll the selected item into view if there are some results at all.
+  if (results.length !== 0) {
+    this.listDom.children[this.selectedIdx].scrollIntoViewIfNeeded();
+  }
+}
+
+HeadsUpPanel.prototype.getDefaultState = function() {
+  var res = { type: this.type };
+  this.getStateDraggable(res);
+  return res;
+}
+
+HeadsUpPanel.prototype.getState = function() {
+  var res = this.getDefaultState();
+  res.query = this.inputDom.value;
+  res.isHidden = this.isHidden();
+  return res;
+}
+
+HeadsUpPanel.prototype.setState = function(state) {
+  this.setStateDraggable(state);
+  this.inputDom.value = state.query;
+  if (state.isHidden) {
+    this.hide();
+  }
+}
+
 function onLoad() {
   var stateFile = parseLocationSearch()['stateFile'];
 
@@ -705,8 +946,39 @@ function onLoad() {
   var editorContainer = document.getElementById('editorContainer');
 
   window.stateManager = new StateManager(stateFile);
-  stateManager.searchView = new SearchView(editorContainer);
-  stateManager.searchView.hide();
+  stateManager.initPromise.then(function() {
+    stateManager.searchView = stateManager.views.filter(function(panel) {
+      return panel.type == 'SearchView';
+    })[0];
+    stateManager.headsUpPanel = stateManager.views.filter(function(panel) {
+      return panel.type == 'HeadsUpPanel';
+    })[0];
+
+    if (!stateManager.searchView) {
+      stateManager.searchView = new SearchView(editorContainer);
+      stateManager.searchView.hide();
+    }
+
+    if (!stateManager.headsUpPanel) {
+      stateManager.headsUpPanel = new HeadsUpPanel(editorContainer);
+      stateManager.headsUpPanel.hide();
+    }
+  });
+
+  document.addEventListener('keydown', function(evt) {
+    if (evt.metaKey == true) {
+      if (evt.keyCode == 80 /* P */) {
+        stateManager.headsUpPanel.show();
+        evt.preventDefault();
+        evt.stopPropagation();
+      } else if (evt.keyCode == 70 /* F */) {
+        stateManager.searchView.show();
+        stateManager.searchView.focus();
+        evt.preventDefault();
+        evt.stopPropagation();
+      }
+    }
+  });
 
   editorContainer.addEventListener('dblclick', function(ev) {
     if (ev.target !== editorContainer) return;
@@ -722,5 +994,3 @@ function onLoad() {
     stateManager.save();
   }, 5000);
 }
-
-
