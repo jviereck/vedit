@@ -621,7 +621,7 @@ function EditorView(parentDom, state) {
       "Ctrl-F": function(cm) {
         new EditorView(
             parentDom, mixin(self.getState(), self.getPositionOnRight()));
-      },
+      },     
 
       "Shift-Cmd-F": function(cm) {
         stateManager.searchView.show();
@@ -630,22 +630,7 @@ function EditorView(parentDom, state) {
       },
 
       "Ctrl-T": function(cm) {
-        var selections = cm.listSelections();
-        selections.forEach(function(selection) {
-          var from = selection.head;
-          var to = selection.anchor;
-          if (from.line > to.line || from.ch > to.ch) {
-           	var t = from;
-            from = to; to = t;
-          }
-          var widget = document.createElement('span');
-          widget.textContent = '→'
-          cm.markText(from, to, {
-            replaceWith: widget,
-            clearOnEnter: true,
-            __isFold: true
-          });
-        });
+        self.createLineMarkFromSelection();
       }
     }
   });
@@ -660,6 +645,72 @@ function EditorView(parentDom, state) {
 }
 
 mixin(EditorView.prototype, DraggableMixin);
+
+EditorView.prototype.createLineMarkFromSelection = function() {
+  var editor = this.editor;
+  var selections = editor.listSelections();
+  selections.forEach(function(selection) {
+	  var from = selection.head;
+    var to = selection.anchor;
+    
+    if (from.line > to.line || from.ch > to.ch) {
+      var t = from;
+      from = to; to = t;
+    }
+    this.createLineMark(from, to)
+  }, this);
+};
+    
+EditorView.prototype.createLineMark = function(from, to, hideMarkedContent) {
+  var editor = this.editor;
+
+  var hideMarkedContent = !hideMarkedContent;
+  var widget = document.createElement('span');
+  widget.innerHTML = '<strong>Marked some lines here.</strong>';
+
+  var marker = null;
+  var toggleMarker = function() {
+    hideMarkedContent = !hideMarkedContent;
+    if (hideMarkedContent) {
+      marker = editor.markText(from, to, {
+        replacedWith: widget
+      });
+    } else {
+      marker = editor.markText(from, to);
+    } 
+  }
+  toggleMarker();
+
+  var lineAboveWidget = document.createElement('div');
+  lineAboveWidget.className = 'lineMarker-top';
+
+  var lineWidget = document.createElement('div');
+  lineWidget.className = 'lineMarker-bottom';
+
+  var toggleButton = document.createElement('button');
+  toggleButton.appendChild(document.createTextNode('Toggle'));
+  toggleButton.onclick = function(evt) {
+    var find = marker.find();
+    from = find.from; to = find.to;
+    marker.clear();
+    toggleMarker();
+  }
+
+  var removeButton = document.createElement('button');
+  removeButton.appendChild(document.createTextNode('Remove lines mark'));
+  removeButton.onclick = function() {
+    marker.clear();
+    widgetBelow.clear();
+    widgetAbove.clear();
+  }
+
+  lineAboveWidget.appendChild(toggleButton);
+  lineAboveWidget.appendChild(removeButton);
+  var widgetAbove = editor.addLineWidget(from.line, lineAboveWidget, {
+    above: true
+  });
+  var widgetBelow = editor.addLineWidget(to.line, lineWidget);
+}
 
 EditorView.prototype.layout = function() {
   this.editor.refresh();

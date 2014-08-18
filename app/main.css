@@ -16,6 +16,17 @@ html {
   width: 100%;
 }
 
+.lineMarker-top {
+  border-top: 1px solid black;
+  border-bottom: 1px solid grey;
+  padding: 2px 10px;
+  background: #f7f7f7;
+}
+
+.lineMarker-bottom {
+  border-top: 1px solid black;
+}
+
 .editor-view {
   position: absolute;
   width: 500px;
