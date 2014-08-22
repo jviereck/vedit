@@ -210,23 +210,29 @@ function snap(diff) {
 var smartMovePanel = null;
 var mouseStartPos = null;
 var domPos = {};
-var onlyCmdDown = false;
+var onlyDraggableKeys = false;
 
 function resetSmartDragging() {
-  onlyCmdDown = false;
+  onlyDraggableKeys = false;
   mouseStartPos = null;
   smartMovePanel = null;
 }
 
 window.addEventListener('keydown', function(evt) {
-  if (evt.keyCode == 91 && evt.metaKey) {
-    onlyCmdDown = true;
+// For dragging with Cmd + Alt key.
+//  if (evt.keyCode == 18 && evt.metaKey && evt.altKey &&
+//     !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
+  // For dragging with only CMD key.
+  if (evt.keyCode == 91 && evt.metaKey && !evt.altKey && 
+     !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
+    onlyDraggableKeys = true;
   } else {
     resetSmartDragging();
   }
 });
 window.addEventListener('keyup', resetSmartDragging);
 window.addEventListener('click', resetSmartDragging);
+window.addEventListener('blur', resetSmartDragging);
 
 window.addEventListener('mousemove', function(evt) {
   if (smartMovePanel) {
@@ -262,7 +268,7 @@ var DraggableMixin = {
     });
 
     this.dom.addEventListener('mousemove', function(evt) {
-      if (onlyCmdDown) {
+      if (onlyDraggableKeys) {
         if (mouseStartPos == null) {
           mouseStartPos = { x: evt.pageX, y: evt.pageY };
           domPos = self.getPosition();
