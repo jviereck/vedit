@@ -1,5 +1,5 @@
 var kGRID = 20;
-var kRESIZE = 1.5;
+var kRESIZE = 1.3;
 
 var stateManager = null;
 
@@ -681,7 +681,13 @@ function EditorView(parentDom, state) {
       }
     }
   });
+  editor.on('gutterClick', function(cm, line, gutter, evt) {
+    if (evt.detail == 2 /* dblClick */) {
+      self.toggleGutter();
+    }
+  });
 
+  this.gutterHidden = false;
   if (state) this.setState(state);
 
   // Init the mixins.
@@ -692,6 +698,21 @@ function EditorView(parentDom, state) {
 }
 
 mixin(EditorView.prototype, DraggableMixin);
+
+EditorView.prototype.toggleGutter = function() {
+  this.setGutterVisibility(!this.gutterHidden);
+}
+
+EditorView.prototype.setGutterVisibility = function(hidden) {
+  this.gutterHidden = hidden;
+  if (hidden) {
+	this.editor.setOption('lineNumbers', false);
+    this.editor.setOption('gutters', ['gutter-placeholder']);
+  } else {
+	this.editor.setOption('lineNumbers', true);
+    this.editor.setOption('gutters', []);
+  }
+}
 
 EditorView.prototype.createLineMarkFromSelection = function() {
   var editor = this.editor;
@@ -794,6 +815,7 @@ EditorView.prototype.getState = function() {
   res.filePath = filePath;
   res.scrollX = scrollInfo.left;
   res.scrollY = scrollInfo.top;
+  res.gutterHidden = this.gutterHidden;
   return res;
 }
 
@@ -825,6 +847,8 @@ EditorView.prototype.setState = function(state) {
 
   var settings = this.settings = mixin(state.settings || {}, stateManager.settings);
   this.editor.setOption('tabSize', settings.tab_size);
+
+  this.setGutterVisibility(state.gutterHidden);
 
   this.showFile(state.filePath, state.fileOptions).then(function() {
     // Once the file is loaded and shown in the editor, either set the cursor

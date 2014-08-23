@@ -105,6 +105,15 @@ html {
 }
 
 /* === Error gutter and marker === */
+.gutter-placeholder {
+  transition: width 0.2s;
+  width: 7px;
+}
+
+.gutter-placeholder:hover {
+  width: 25px;
+}
+
 .error-gutter {
   width: 20px;
 }
