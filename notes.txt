@@ -2,11 +2,13 @@ Future ideas for vEdit:
 
 - [ ] REFACTOR "View" to "Panel" in every use throughout the codebase
   - [ ] Rename "Search[View]" to "SearchPanel"
-  
-- [ ] Remove the storage of the current session state in localStorage
+
+- [x] Remove the storage of the current session state in localStorage
       to simplify the implementation of the SessionManager.
-  
-- [ ] Add project setting to control the 
+
+- [ ] Open the HeadsUpDisplay at the position the user clicks
+
+- [ ] Add project setting to control the
   - [ ] visiblity of hidden characters
   - [ ] the default space size
 
@@ -19,24 +21,24 @@ Future ideas for vEdit:
   - [ ] Add way to toggle line-numbers of editor panel
   - [ ] Add way to minimise/maximise a panel
   - [ ] Add way to fold a panel into an icon and unfold it again
-  
+
 - [ ] Add a "panel" container on the top, which can to take up
       icons, that the user doesn't want to have in the work space
       at the current moment
    - this is a sort of "keep the panel remindet"
-   
+
 - [ ] Add way to open up editor panels by dropping a patch file on
       the work space
   - the editor views are opened based on the chunks in the patch file
 
 - [ ] Add a way (from the heads up display) to control the currently
       displayed panels on the workspace and rearrange them
-      
+
 - [ ] Add a way to render a minimap of the source code in an editor view
       and allow to navigate to this point
-      
+
 - [ ] Add way to fold away a block of lines in the editor panel
-  
+
 - [ ] Add way to search for files given a file name
   - do this by extending the search panel
   - add a new dblclick and content-render handler, that handles

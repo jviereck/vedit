@@ -79,7 +79,8 @@ html {
 }
 
 .searchUI-args, .searchUI-cmd, .searchUI-search {
-  width: calc(100% - 8px);
+  width: calc(100% - 6px);
+  font-size: 22px;
 }
 
 .searchUI-table {
@@ -96,7 +97,7 @@ html {
    * FIXME: Make the position less magically! */
   position: absolute;
   bottom: 5px;
-  top: 65px;
+  top: 45px;
   width: calc(100% - 10px);
 }
 

@@ -364,7 +364,7 @@ var DraggableMixin = {
     var dom = this.dom;
     dom.style.width = state.width;
     dom.style.height = state.height;
-    this.on('resize', null, this);
+    this.emit('resize', null, this);
   },
 
   getSize: function() {
@@ -511,9 +511,8 @@ SearchView.prototype.exec = function() {
   var options = {};
   var query = this.queryInput.value;
   query = '"' + query.replace(/"/g, '\\"') + '"';
-  var cmdRaw = this.cmdInput.value;
-  var cwd = cmdRaw.split('@')[1];
-  var cmd = cmdRaw.split('@')[0].trim().replace('$0', query);
+  var cwd = getProjectRoot() + '/';
+  var cmd = 'ag -A 3 -B 3 -Q -i ' + query;
 
   if (cwd) options.cwd = cwd.trim();
 
@@ -538,8 +537,7 @@ SearchView.prototype.getDefaultState = function() {
   var res = { type: this.type };
 
   this.getStateDraggable(res);
-  res.cmd = 'ag -A 3 -B 3 -Q -i $0 @ ' + getProjectRoot();
-  res.query = 'HelloWorld';
+  res.query = '';
   return res;
 }
 
@@ -588,7 +586,6 @@ SearchView.prototype.formatResponse = function(cwd, res) {
 
 SearchView.prototype.getState = function() {
   var res = this.getDefaultState();
-  res.cmd = this.cmdInput.value;
   res.query = this.queryInput.value;
   res.isHidden = this.isHidden();
   return res;
@@ -596,7 +593,6 @@ SearchView.prototype.getState = function() {
 
 SearchView.prototype.setState = function(state) {
   this.setStateDraggable(state);
-  this.cmdInput.value = state.cmd;
   this.queryInput.value = state.query;
   if (state.isHidden) {
     this.hide();
