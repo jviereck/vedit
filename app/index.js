@@ -222,14 +222,13 @@ function resetSmartDragging() {
 }
 
 window.addEventListener('keydown', function(evt) {
-// For dragging with Cmd + Alt key.
-//  if (evt.keyCode == 18 && evt.metaKey && evt.altKey &&
-//     !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
   // For dragging with only CMD key.
   if (evt.metaKey && !evt.altKey && !evt.altGraphKey && !evt.ctrlKey &&
-      evt.charCode == 0 && (evt.keyCode == 16 || evt.keyCode == 91)) {
+      evt.charCode == 0 && (
+        evt.keyCode == 16 || evt.keyCode == 91 || evt.keyCode == 224
+      )) {
     var oldOnlyDraggableKeys = onlyDraggableKeys;
-    if (evt.keyCode == 91) {
+    if (evt.keyCode == 91 /* Chrome */ || evt.keyCode == 224 /* Gecko */) {
       onlyDraggableKeys = 'Cmd';
     } else {
       onlyDraggableKeys = 'Shift-Cmd';
@@ -423,12 +422,6 @@ function SearchView(parentDom, state) {
     editorView.setPosition(self.getPositionOnRight());
   });
 
-  this.on('hide', function() {
-    if (self.editorView) {
-      self.editorView.hide();
-    }
-  });
-
   this.on('show', function() {
     if (self.editorView) {
       self.editorView.show();
@@ -602,7 +595,6 @@ SearchView.prototype.setState = function(state) {
 SearchView.prototype.close = function() {
   this.emit('close');
   this.removeEverything();
-  this.resetEditorView();
   this.parentDom.removeChild(this.dom);
   stateManager.removeView(this);
 }
@@ -661,7 +653,8 @@ function EditorView(parentDom, state) {
 
       "Ctrl-F": function(cm) {
         var newState = mixin(self.getState(), self.getPositionOnRight());
-        new EditorView(parentDom, mixin(newState, {width: '450px'}));
+        var view = new EditorView(parentDom, mixin(newState, {width: '450px'}));
+        view.focus();
       },
 
       "Shift-Cmd-F": function(cm) {
@@ -710,6 +703,10 @@ function EditorView(parentDom, state) {
 }
 
 mixin(EditorView.prototype, DraggableMixin);
+
+EditorView.prototype.focus = function() {
+  this.editor.focus(); 
+}
 
 EditorView.prototype.toggleGutter = function() {
   this.setGutterVisibility(!this.gutterHidden);
@@ -890,34 +887,6 @@ EditorView.prototype.setState = function(state) {
   });
 }
 
-function createNewView(ev, filePath, state) {
-  if (state) filePath = state.filePath;
-
-  if (!filePath) {
-    filePath = prompt(
-        'Which file should be opened? Please insert the file path:',
-        '/Users/jviereck/develop/vedit/server.js');
-  }
-
-  if (!filePath) return;
-
-  var editorContainer = document.getElementById('editorContainer');
-  var view = new EditorView(editorContainer);
-
-  if (ev) {
-    view.dom.style.left = Math.floor(ev.offsetX / kGRID) * kGRID + 'px';
-    view.dom.style.top = Math.floor(ev.offsetY / kGRID) * kGRID + 'px';
-    view.focus();
-  }
-
-  if (state) {
-    view.setState(state);
-  } else {
-    view.showFile(filePath);
-  }
-  return view;
-}
-
 function loadStateFile(filePath) {
   if (!filePath) {
     filePath = prompt(
@@ -1001,6 +970,7 @@ function HeadsUpPanel(parentDom, state) {
   });
 
   this.fileCache = [];
+  this.fileCacheLowercase = [];
   this.resultList = [];
   this.updateFileListCache();
 
@@ -1035,6 +1005,9 @@ HeadsUpPanel.prototype.updateFileListCache = function() {
   })).then(function(content) {
     self.selectedIdx = 0;
     self.fileCache = content.split('\n');
+    self.fileCacheLowercase = self.fileCache.map(function(entry) {
+      return entry.toLowerCase();
+    });
     self.updateList();
   });
 }
@@ -1048,16 +1021,22 @@ HeadsUpPanel.prototype.updateList = function() {
   if (query === '') return;
 
   // Compute the result list to show.
-  var results = this.fileCache.filter(function(entry) {
-    return entry.toLowerCase().indexOf(query) !== -1;
-  }).map(function(entry) {
-    var lastIndex = entry.toLowerCase().lastIndexOf(query);
-    return {
-      // Smaller score is better.
-      score: (entry.length - lastIndex) * entry.length,
-      entry: entry
-    };
-  }).sort(function(a, b) {
+  var results = [];
+  var fileCache = this.fileCache;
+  var fileCacheLowercase = this.fileCacheLowercase;
+  for (var i = 0; i < fileCacheLowercase.length; i++) {
+    var entry = fileCacheLowercase[i];
+    if (entry.indexOf(query) !== -1) {
+      var lastIndex = entry.lastIndexOf(query);
+      results.push({
+	    // Smaller score is better.
+        score: (entry.length - lastIndex) * entry.length,
+        entry: fileCache[i]
+      });
+    }
+  }
+  
+  results = results.sort(function(a, b) {
     return a.score - b.score;
   }).map(function(obj) { return obj.entry; });
 
@@ -1161,10 +1140,12 @@ function onLoad() {
     if (evt.target !== editorContainer) return;
 
     stateManager.headsUpPanel.show();
+    
     stateManager.headsUpPanel.setPosition({
-      top: snap(evt.pageY) + 'px',
-      left: snap(evt.pageX) + 'px'
-    });
+      top: evt.pageY + 'px',
+      left: evt.pageX + 'px'
+    })
+    
     evt.preventDefault();
     evt.stopPropagation();
   });
