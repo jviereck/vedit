@@ -1140,8 +1140,10 @@ function onLoad() {
     if (evt.target !== editorContainer) return;
 
     stateManager.headsUpPanel.show();
-    
-    // TODO: Open the panel next to the cursor position.
+    stateManager.headsUpPanel.setPosition({
+      top: snap(evt.pageY) + 'px',
+      left: snap(evt.pageX) + 'px'
+    });
     
     evt.preventDefault();
     evt.stopPropagation();
