@@ -54,12 +54,13 @@ file for you.
 
 There are not many features yet. Here is what is possible:
 
-- open a file: double click somewhere on the editor area and enter the file path
-  you want to open in the input box. This opens a new editor panel
-- the editor panel can be moved by dragging the editor's gutter
-- the editor panel can be resized on the right and bottom edge
-- there is a project wide search (well, actually there is something that executes
-  a command on your command line and shows you the result... see more below)
+- open a file: double click somewhere on the editor area to search for files from
+  the root of the current state file directory
+- the editor panel can be moved by dragging the editor's gutter or pressing the
+  Cmd key while moving the mouse
+- the editor panel can be resized on the right and bottom edge or by pressing the
+  Cmd and Shift key while moving the mouse
+- there is a project wide search
 
 Notes showing what might come next are availabe in the [notes.txt](notes.txt) file.
 
@@ -71,23 +72,8 @@ ESC         | closes the panel
 Cmd-S       | saves ALL files that were changed
 Ctrl-F      | forks the current editor view - opens a new view into the same file
 Shift-Cmd-F | opens the search panel
+Cmd-=       | zoom text in
+Cmd--       | zoom text out
+Cmd-0       | reset zoom
 
-## Cross-Project search
-
-This is kind of a ugly hack at the moment. From an editor panel, press `Cmd+Shift+F`
-to open the "search" window. The panel you see executes the specified command
-on the server and displayes the result in the panel. The working directory to
-execute the command in is specify by the part after the `@` sign, e.g.
-
-```
-some-command $0 @ /some/working/path
-```
-
-will run `some-command` from the directory `/some/working/path`. The `$0` is a
-placeholder for the entered "query" string. When pressing ENTER on the query input
-field, the command is executed. At the moment, the code assumes the output to come
-from the `ag` command. Clicking on a line on the output will open a editor panel
-of the corresponding file. If you want to keep the editor panel opened after the
-search panel is closed, you have to drag it away. You can close the search panel
-by pressing ESC when the editor is focused.
 

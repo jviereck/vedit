@@ -206,8 +206,8 @@ var mixin = function(a, b) {
   return a;
 }
 
-function snap(diff) {
-  return Math.floor(diff / kGRID) * kGRID;
+function snap(coordinate) {
+  return Math.floor(coordinate / kGRID) * kGRID;
 }
 
 var smartMovePanel = null;
@@ -350,7 +350,8 @@ var DraggableMixin = {
     var scrollLeft = document.body.scrollLeft;
     return {
       top: 100 + 'px',
-      left: (parent.offsetWidth - size.width) / 2 + scrollLeft
+      left: 'calc((' + parent.offsetWidth + 'px - ' +
+      	size.width + ') / 2 + ' + scrollLeft + 'px)'
     }
   },
 
@@ -681,6 +682,10 @@ function EditorView(parentDom, state) {
         self.setFontZoom(self.fontZoom * 1.05);
       },
 
+      "Cmd-+": function(cm) {
+        self.setFontZoom(self.fontZoom * 1.05);
+      },
+
       "Cmd--": function(cm) {
         self.setFontZoom(self.fontZoom / 1.05);
       },
@@ -712,11 +717,13 @@ mixin(EditorView.prototype, DraggableMixin);
 
 EditorView.prototype.toggleGutter = function() {
   this.setGutterVisibility(!this.gutterHidden);
+  this.layout();
 }
 
 EditorView.prototype.setFontZoom = function(fontZoom) {
   this.fontZoom = fontZoom;
   this.editor.display.wrapper.style.fontSize = this.settings.font_size * fontZoom + 'px';
+  this.layout();
 }
 
 EditorView.prototype.setGutterVisibility = function(hidden) {
@@ -1158,6 +1165,10 @@ function onLoad() {
     if (evt.target !== editorContainer) return;
 
     stateManager.headsUpPanel.show();
+    stateManager.headsUpPanel.setPosition({
+      top: snap(evt.pageY) + 'px',
+      left: snap(evt.pageX) + 'px'
+    });
     evt.preventDefault();
     evt.stopPropagation();
   });
