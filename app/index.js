@@ -1,4 +1,5 @@
 var kGRID = 20;
+var kRESIZE = 1.5;
 
 var stateManager = null;
 
@@ -224,9 +225,17 @@ window.addEventListener('keydown', function(evt) {
 //  if (evt.keyCode == 18 && evt.metaKey && evt.altKey &&
 //     !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
   // For dragging with only CMD key.
-  if (evt.keyCode == 91 && evt.metaKey && !evt.altKey &&
-     !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
-    onlyDraggableKeys = true;
+  if (evt.metaKey && !evt.altKey && !evt.altGraphKey && !evt.ctrlKey &&
+      evt.charCode == 0 && (evt.keyCode == 16 || evt.keyCode == 91)) {
+    var oldOnlyDraggableKeys = onlyDraggableKeys;
+    if (evt.keyCode == 91) {
+      onlyDraggableKeys = 'Cmd';
+    } else {
+      onlyDraggableKeys = 'Shift-Cmd';
+    }
+    if (oldOnlyDraggableKeys !== onlyDraggableKeys) {
+      smartMovePanel = null;
+    }
   } else {
     resetSmartDragging();
   }
@@ -249,13 +258,23 @@ window.addEventListener('mousemove', function(evt) {
       return;
     }
 
-    var diffX = snap(evt.pageX - mouseStartPos.x);
+    if (onlyDraggableKeys == 'Cmd') {
+      var diffX = snap(evt.pageX - mouseStartPos.x);
     var diffY = snap(evt.pageY - mouseStartPos.y);
 
-    smartMovePanel.setPosition({
-      left: 'calc(' + domPos.left + ' + ' + diffX + 'px)',
-      top:  'calc(' + domPos.top  + ' + ' + diffY + 'px)'
-    });
+      smartMovePanel.setPosition({
+        left: 'calc(' + domPos.left + ' + ' + diffX + 'px)',
+        top:  'calc(' + domPos.top  + ' + ' + diffY + 'px)'
+      });
+    } else if (onlyDraggableKeys == 'Shift-Cmd') {
+      var diffX = snap((evt.pageX - mouseStartPos.x) * kRESIZE);
+    var diffY = snap((evt.pageY - mouseStartPos.y) * kRESIZE);
+
+    smartMovePanel.setSize({
+        width: 'calc(' + domSize.width + ' + ' + diffX + 'px)',
+        height:  'calc(' + domSize.height  + ' + ' + diffY + 'px)'
+      });
+    }
 
     lastMousePos = { x: evt.pageX, y: evt.pageY };
   }
@@ -287,6 +306,7 @@ var DraggableMixin = {
         if (mouseStartPos == null) {
           mouseStartPos = { x: evt.pageX, y: evt.pageY };
           domPos = self.getPosition();
+          domSize = self.getSize();
         } else if (smartMovePanel == null) {
           var diffX = snap(evt.clientX - mouseStartPos.x);
           var diffY = snap(evt.clientY - mouseStartPos.y);
@@ -305,19 +325,13 @@ var DraggableMixin = {
   },
 
   getStateDraggable: function(state) {
-    var style = window.getComputedStyle(this.dom);
-    state.top = style.top;
-    state.left = style.left;
-    state.width = style.width;
-    state.height = style.height;
+    mixin(state, this.getPosition());
+    mixin(state, this.getSize());
   },
 
   setStateDraggable: function(state) {
-    var dom = this.dom;
-    dom.style.top = state.top;
-    dom.style.left = state.left;
-    dom.style.width = state.width;
-    dom.style.height = state.height;
+    this.setSize(state);
+    this.setPosition(state);
   },
 
   getPositionOnRight: function() {
@@ -347,6 +361,17 @@ var DraggableMixin = {
   getPosition: function(state) {
     var style = window.getComputedStyle(this.dom);
     return { top: style.top, left: style.left };
+  },
+
+  setSize: function(state) {
+    var dom = this.dom;
+    dom.style.width = state.width;
+    dom.style.height = state.height;
+  },
+
+  getSize: function() {
+    var style = window.getComputedStyle(this.dom);
+    return { width: style.width, height: style.height };
   },
 
   hide: function() {
