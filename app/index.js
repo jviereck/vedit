@@ -1141,10 +1141,7 @@ function onLoad() {
 
     stateManager.headsUpPanel.show();
     
-    stateManager.headsUpPanel.setPosition({
-      top: evt.pageY + 'px',
-      left: evt.pageX + 'px'
-    })
+    // TODO: Open the panel next to the cursor position.
     
     evt.preventDefault();
     evt.stopPropagation();
