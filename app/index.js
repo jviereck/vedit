@@ -209,6 +209,7 @@ function snap(diff) {
 
 var smartMovePanel = null;
 var mouseStartPos = null;
+var lastMousePos = {};
 var domPos = {};
 var onlyDraggableKeys = false;
 
@@ -223,7 +224,7 @@ window.addEventListener('keydown', function(evt) {
 //  if (evt.keyCode == 18 && evt.metaKey && evt.altKey &&
 //     !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
   // For dragging with only CMD key.
-  if (evt.keyCode == 91 && evt.metaKey && !evt.altKey && 
+  if (evt.keyCode == 91 && evt.metaKey && !evt.altKey &&
      !evt.altGraphKey && !evt.ctrlKey && evt.charCode == 0) {
     onlyDraggableKeys = true;
   } else {
@@ -236,13 +237,27 @@ window.addEventListener('blur', resetSmartDragging);
 
 window.addEventListener('mousemove', function(evt) {
   if (smartMovePanel) {
-    var diffX = snap(evt.clientX - mouseStartPos.x);
-    var diffY = snap(evt.clientY - mouseStartPos.y);
+    var mouseMoveDiffX = evt.pageX - lastMousePos.x;
+    var mouseMoveDiffY = evt.pageY - lastMousePos.y;
+    // If the distance between the last drag is too large,
+    // then ignore the dragging. This happens if the window
+    // looses focus and later gets the focus again (e.g. when
+    // pressing CMD+Tab for app switching and then pressing Esc
+    // to exit selecting a different app).
+    if (mouseMoveDiffX * mouseMoveDiffX + mouseMoveDiffY * mouseMoveDiffY > 4 * kGRID * kGRID) {
+      resetSmartDragging();
+      return;
+    }
+
+    var diffX = snap(evt.pageX - mouseStartPos.x);
+    var diffY = snap(evt.pageY - mouseStartPos.y);
 
     smartMovePanel.setPosition({
       left: 'calc(' + domPos.left + ' + ' + diffX + 'px)',
       top:  'calc(' + domPos.top  + ' + ' + diffY + 'px)'
     });
+
+    lastMousePos = { x: evt.pageX, y: evt.pageY };
   }
 });
 
@@ -278,6 +293,7 @@ var DraggableMixin = {
           if (diffX * diffX + diffY * diffY > 4 * kGRID * kGRID) {
             smartMovePanel = self;
             mouseStartPos = { x: evt.pageX, y: evt.pageY };
+            lastMousePos = { x: evt.pageX, y: evt.pageY };
           }
         }
       }
@@ -627,7 +643,7 @@ function EditorView(parentDom, state) {
       "Ctrl-F": function(cm) {
         new EditorView(
             parentDom, mixin(self.getState(), self.getPositionOnRight()));
-      },     
+      },
 
       "Shift-Cmd-F": function(cm) {
         stateManager.searchView.show();
@@ -656,9 +672,9 @@ EditorView.prototype.createLineMarkFromSelection = function() {
   var editor = this.editor;
   var selections = editor.listSelections();
   selections.forEach(function(selection) {
-	  var from = selection.head;
+    var from = selection.head;
     var to = selection.anchor;
-    
+
     if (from.line > to.line || from.ch > to.ch) {
       var t = from;
       from = to; to = t;
@@ -666,7 +682,7 @@ EditorView.prototype.createLineMarkFromSelection = function() {
     this.createLineMark(from, to)
   }, this);
 };
-    
+
 EditorView.prototype.createLineMark = function(from, to, hideMarkedContent) {
   var editor = this.editor;
 
@@ -683,7 +699,7 @@ EditorView.prototype.createLineMark = function(from, to, hideMarkedContent) {
       });
     } else {
       marker = editor.markText(from, to);
-    } 
+    }
   }
   toggleMarker();
 
