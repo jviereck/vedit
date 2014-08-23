@@ -641,8 +641,8 @@ function EditorView(parentDom, state) {
       },
 
       "Ctrl-F": function(cm) {
-        new EditorView(
-            parentDom, mixin(self.getState(), self.getPositionOnRight()));
+        var newState = mixin(self.getState(), self.getPositionOnRight());
+        new EditorView(parentDom, mixin(newState, {width: '450px'}));
       },
 
       "Shift-Cmd-F": function(cm) {
