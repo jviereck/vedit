@@ -60,6 +60,7 @@ StateManager.prototype.getDefaultState = function() {
   return {
     settings: {
       tab_size: 4,
+      font_size: 11
     },
     views: []
   };
@@ -89,6 +90,7 @@ StateManager.prototype.setStateFilePath = function(stateFilePath) {
 
 StateManager.prototype.applyState = function(state) {
   state = mixin(this.getDefaultState(), state);
+  state.settings = mixin(this.getDefaultState().settings, state.settings);
   this.settings = state.settings;
   this.views = state.views.map(function(viewState) {
     if (viewState.type == 'EditorView') {
@@ -210,7 +212,6 @@ function snap(diff) {
 
 var smartMovePanel = null;
 var mouseStartPos = null;
-var lastMousePos = {};
 var domPos = {};
 var onlyDraggableKeys = false;
 
@@ -246,21 +247,9 @@ window.addEventListener('blur', resetSmartDragging);
 
 window.addEventListener('mousemove', function(evt) {
   if (smartMovePanel) {
-    var mouseMoveDiffX = evt.pageX - lastMousePos.x;
-    var mouseMoveDiffY = evt.pageY - lastMousePos.y;
-    // If the distance between the last drag is too large,
-    // then ignore the dragging. This happens if the window
-    // looses focus and later gets the focus again (e.g. when
-    // pressing CMD+Tab for app switching and then pressing Esc
-    // to exit selecting a different app).
-    if (mouseMoveDiffX * mouseMoveDiffX + mouseMoveDiffY * mouseMoveDiffY > 4 * kGRID * kGRID) {
-      resetSmartDragging();
-      return;
-    }
-
     if (onlyDraggableKeys == 'Cmd') {
       var diffX = snap(evt.pageX - mouseStartPos.x);
-    var diffY = snap(evt.pageY - mouseStartPos.y);
+      var diffY = snap(evt.pageY - mouseStartPos.y);
 
       smartMovePanel.setPosition({
         left: 'calc(' + domPos.left + ' + ' + diffX + 'px)',
@@ -268,15 +257,13 @@ window.addEventListener('mousemove', function(evt) {
       });
     } else if (onlyDraggableKeys == 'Shift-Cmd') {
       var diffX = snap((evt.pageX - mouseStartPos.x) * kRESIZE);
-    var diffY = snap((evt.pageY - mouseStartPos.y) * kRESIZE);
+      var diffY = snap((evt.pageY - mouseStartPos.y) * kRESIZE);
 
-    smartMovePanel.setSize({
+      smartMovePanel.setSize({
         width: 'calc(' + domSize.width + ' + ' + diffX + 'px)',
-        height:  'calc(' + domSize.height  + ' + ' + diffY + 'px)'
+        height: 'calc(' + domSize.height  + ' + ' + diffY + 'px)'
       });
     }
-
-    lastMousePos = { x: evt.pageX, y: evt.pageY };
   }
 });
 
@@ -313,7 +300,6 @@ var DraggableMixin = {
           if (diffX * diffX + diffY * diffY > 4 * kGRID * kGRID) {
             smartMovePanel = self;
             mouseStartPos = { x: evt.pageX, y: evt.pageY };
-            lastMousePos = { x: evt.pageX, y: evt.pageY };
           }
         }
       }
@@ -358,6 +344,16 @@ var DraggableMixin = {
     dom.style.left = state.left;
   },
 
+  getCenterTop: function() {
+    var size = this.getSize();
+    var parent = this.dom.parentNode;
+    var scrollLeft = document.body.scrollLeft;
+    return {
+      top: 100 + 'px',
+      left: (parent.offsetWidth - size.width) / 2 + scrollLeft
+    }
+  },
+
   getPosition: function(state) {
     var style = window.getComputedStyle(this.dom);
     return { top: style.top, left: style.left };
@@ -367,6 +363,7 @@ var DraggableMixin = {
     var dom = this.dom;
     dom.style.width = state.width;
     dom.style.height = state.height;
+    this.on('resize', null, this);
   },
 
   getSize: function() {
@@ -678,6 +675,18 @@ function EditorView(parentDom, state) {
 
       "Ctrl-T": function(cm) {
         self.createLineMarkFromSelection();
+      },
+
+      "Cmd-=": function(cm) {
+        self.setFontZoom(self.fontZoom * 1.05);
+      },
+
+      "Cmd--": function(cm) {
+        self.setFontZoom(self.fontZoom / 1.05);
+      },
+
+      "Cmd-0": function(cm) {
+        self.setFontZoom(1.0);
       }
     }
   });
@@ -688,6 +697,8 @@ function EditorView(parentDom, state) {
   });
 
   this.gutterHidden = false;
+  this.fontZoom = 1.0;
+
   if (state) this.setState(state);
 
   // Init the mixins.
@@ -701,6 +712,11 @@ mixin(EditorView.prototype, DraggableMixin);
 
 EditorView.prototype.toggleGutter = function() {
   this.setGutterVisibility(!this.gutterHidden);
+}
+
+EditorView.prototype.setFontZoom = function(fontZoom) {
+  this.fontZoom = fontZoom;
+  this.editor.display.wrapper.style.fontSize = this.settings.font_size * fontZoom + 'px';
 }
 
 EditorView.prototype.setGutterVisibility = function(hidden) {
@@ -816,6 +832,7 @@ EditorView.prototype.getState = function() {
   res.scrollX = scrollInfo.left;
   res.scrollY = scrollInfo.top;
   res.gutterHidden = this.gutterHidden;
+  res.fontZoom = this.fontZoom;
   return res;
 }
 
@@ -849,6 +866,7 @@ EditorView.prototype.setState = function(state) {
   this.editor.setOption('tabSize', settings.tab_size);
 
   this.setGutterVisibility(state.gutterHidden);
+  this.setFontZoom(state.fontZoom || this.fontZoom);
 
   this.showFile(state.filePath, state.fileOptions).then(function() {
     // Once the file is loaded and shown in the editor, either set the cursor
@@ -975,6 +993,7 @@ function HeadsUpPanel(parentDom, state) {
   this.on('show', function() {
     self.inputDom.value = '';
     self.inputDom.focus();
+    self.setPosition(self.getCenterTop());
     self.updateFileListCache();
   });
 
@@ -999,7 +1018,9 @@ HeadsUpPanel.prototype.handleItemChoice = function(index) {
   var filePath = getProjectRoot() + '/' + item.substring(2);
 
   // Open the file in a new EditorPanel.
-  new EditorView(stateManager.dom, { filePath: filePath });
+  new EditorView(stateManager.dom,
+    mixin({ filePath: filePath }, this.getPosition()));
+  this.hide();
 }
 
 HeadsUpPanel.prototype.updateFileListCache = function() {
@@ -1133,13 +1154,12 @@ function onLoad() {
     }
   }, true);
 
-  editorContainer.addEventListener('dblclick', function(ev) {
-    if (ev.target !== editorContainer) return;
+  editorContainer.addEventListener('dblclick', function(evt) {
+    if (evt.target !== editorContainer) return;
 
-    createNewView(ev);
-    ev.preventDefault();
-    ev.stopPropagation();
-    return false;
+    stateManager.headsUpPanel.show();
+    evt.preventDefault();
+    evt.stopPropagation();
   });
 
   // Save the current editor state every 5 sec.

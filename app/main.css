@@ -7,7 +7,7 @@ html {
   border: 1px solid gray;
   font-family: Meslo LG S;
   font-size: 11px;
-  line-height: 14px;
+  line-height: 1.3em;
 }
 
 #editorContainer {
@@ -48,7 +48,7 @@ html {
 }
 
 .headsUp-list {
-  height: 351px;
+  height: calc(100% - 50px);
   list-style-type: none;
   border: 1px solid gray;
   overflow: scroll;
