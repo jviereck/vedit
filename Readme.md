@@ -23,6 +23,8 @@ install the `ag` command (short version: a faster `ack` replacement) via
 brew install the_silver_searcher
 ```
 
+(on OS X, for other systems see [their readme](https://github.com/ggreer/the_silver_searcher#installation))
+
 and then the server can be started via
 
 ``` bash
