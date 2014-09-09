@@ -5,7 +5,7 @@ html {
 .CodeMirror  {
   height: 100%;
   border: 1px solid gray;
-  font-family: Meslo LG S;
+  font-family: "Meslo LG S", Monospace;
   font-size: 11px;
   line-height: 1.3em;
 }
