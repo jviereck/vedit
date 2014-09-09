@@ -1,6 +1,10 @@
 var kGRID = 20;
 var kRESIZE = 1.3;
 
+// Simple browser detection. Code borrowed from CodeMirror's source.
+var ios = /AppleWebKit/.test(navigator.userAgent) && /Mobile\/\w+/.test(navigator.userAgent);
+var mac = ios || /Mac/.test(navigator.platform);
+
 var stateManager = null;
 
 function decodeFilePath(filePath) {
@@ -616,6 +620,23 @@ function getFileName(path) {
   return splits[splits.length - 1];
 }
 
+var keys = {
+  'save': ['Ctrl-S', 'Cmd-S'],
+  'fork': ['Ctrl-F', 'Ctrl-F'],
+  'searchFile': ['Shift-Ctrl-F', 'Shift-Cmd-F'],
+  'zoomIn': ['Ctrl-=', 'Cmd-='],
+  'zoomOut': ['Ctrl--', 'Cmd--'],
+  'zoomReset': ['Ctrl-0', 'Cmd-0']
+}
+
+function defineKey(hash, maps) {
+  for (var name in maps) {
+    if (maps.hasOwnProperty(name)) {
+      hash[keys[name][mac ? 1 : 0]] = maps[name];
+    }
+  }
+}
+
 function EditorView(parentDom, state) {
   var self = this;
   this.settings = {};
@@ -639,50 +660,41 @@ function EditorView(parentDom, state) {
     self.close();
   });
 
+  var extraKeysMap = {};
+  defineKey(extraKeysMap, {
+    'save': function(cm) {
+      docManager.saveAll();
+      stateManager.save();
+    },
+    'fork': function(cm) {
+      var newState = mixin(self.getState(), self.getPositionOnRight());
+      var view = new EditorView(parentDom, mixin(newState, {width: '450px'}));
+      view.focus();
+    },
+    'searchFile': function(cm) {
+      stateManager.searchView.show();
+      stateManager.searchView.focus();
+      stateManager.searchView.setPosition(self.getPositionInset());
+    },
+    "zoomIn": function(cm) {
+      self.setFontZoom(self.fontZoom * 1.05);
+    },
+    "zoomOut": function(cm) {
+      self.setFontZoom(self.fontZoom / 1.05);
+    },
+    "zoomReset": function(cm) {
+      self.setFontZoom(1.0);
+    }
+  });
+
+
   var editor = this.editor = CodeMirror(editorDom, {
     lineWrapping: false,
     fixedGutter: true,
     lineNumbers: true,
     indentWithTabs: false,
     rulers: [{color: '#ddd', column: 80, lineStyle: 'dashed'}],
-    extraKeys: {
-      "Cmd-S": function(cm) {
-        docManager.saveAll();
-        stateManager.save();
-      },
-
-      "Ctrl-F": function(cm) {
-        var newState = mixin(self.getState(), self.getPositionOnRight());
-        var view = new EditorView(parentDom, mixin(newState, {width: '450px'}));
-        view.focus();
-      },
-
-      "Shift-Cmd-F": function(cm) {
-        stateManager.searchView.show();
-        stateManager.searchView.focus();
-        stateManager.searchView.setPosition(self.getPositionInset());
-      },
-
-      "Ctrl-T": function(cm) {
-        self.createLineMarkFromSelection();
-      },
-
-      "Cmd-=": function(cm) {
-        self.setFontZoom(self.fontZoom * 1.05);
-      },
-
-      "Cmd-+": function(cm) {
-        self.setFontZoom(self.fontZoom * 1.05);
-      },
-
-      "Cmd--": function(cm) {
-        self.setFontZoom(self.fontZoom / 1.05);
-      },
-
-      "Cmd-0": function(cm) {
-        self.setFontZoom(1.0);
-      }
-    }
+    extraKeys: extraKeysMap
   });
   editor.on('gutterClick', function(cm, line, gutter, evt) {
     if (evt.detail == 2 /* dblClick */) {
