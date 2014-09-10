@@ -225,17 +225,25 @@ function resetSmartDragging() {
   smartMovePanel = null;
 }
 
+// Determines if the pressed key is the action key.
+// On mac, the action key is the Cmd key, otherwise use the CTRL key.
+function isActionKey(evt) {
+  if (mac) {
+    // MetaKey: 91 = chrome, 224 = gecko
+    return [91, 224, 16].indexOf(evt.keyCode) >= 0 && !evt.ctrlKey && evt.metaKey;
+  } else {
+    return [16, 17].indexOf(evt.keyCode) >= 0;
+  }
+}
+
 window.addEventListener('keydown', function(evt) {
-  // For dragging with only CMD key.
-  if (evt.metaKey && !evt.altKey && !evt.altGraphKey && !evt.ctrlKey &&
-      evt.charCode == 0 && (
-        evt.keyCode == 16 || evt.keyCode == 91 || evt.keyCode == 224
-      )) {
+  // For dragging with only Action key.
+  if (!evt.altKey && !evt.altGraphKey && evt.charCode == 0 && isActionKey(evt)) {
     var oldOnlyDraggableKeys = onlyDraggableKeys;
-    if (evt.keyCode == 91 /* Chrome */ || evt.keyCode == 224 /* Gecko */) {
-      onlyDraggableKeys = 'Cmd';
-    } else {
+    if (evt.keyCode == 16) {
       onlyDraggableKeys = 'Shift-Cmd';
+    } else {
+      onlyDraggableKeys = 'Cmd';
     }
     if (oldOnlyDraggableKeys !== onlyDraggableKeys) {
       smartMovePanel = null;
@@ -702,7 +710,7 @@ function EditorView(parentDom, state) {
     }
   });
 
-  this.gutterHidden = false;
+  this.gutterHidden = true;
   this.fontZoom = 1.0;
 
   if (state) this.setState(state);
