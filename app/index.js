@@ -178,7 +178,9 @@ DocManager.prototype.get = function(filePath, options) {
           var fileMode = self.fileExtensionModeMap[fileEnding] || '';
           // Once the file content is there, create a new CodeMirror document
           // object and resolve the root-doc-promise.
-          resolve(new CodeMirror.Doc(content, fileMode));
+          var rootDoc = new CodeMirror.Doc(content, fileMode);
+          rootDoc.lastSaveContentHash = md5(content);
+          resolve(rootDoc);
         }, reject);
       })
     }
@@ -192,11 +194,16 @@ DocManager.prototype.get = function(filePath, options) {
   return promise;
 }
 
+
 DocManager.prototype.saveAll = function() {
   Object.keys(this.docs).forEach(function(filePath) {
     var docPromise = this.docs[filePath];
     docPromise.then(function(rootDoc) {
-      fs.set(filePath, rootDoc.getValue());
+      rootDocValue = rootDoc.getValue();
+      if (md5(rootDocValue) !== rootDoc.lastSaveContentHash) {
+      	fs.set(filePath, rootDoc.getValue());
+        rootDoc.lastSaveValue = rootDocValue; 
+      }
     });
   }, this)
 }
