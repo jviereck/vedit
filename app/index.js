@@ -64,7 +64,8 @@ StateManager.prototype.getDefaultState = function() {
   return {
     settings: {
       tab_size: 4,
-      font_size: 11
+      font_size: 11,
+      trim_trailing_white_space_on_save: false
     },
     views: []
   };
@@ -200,9 +201,14 @@ DocManager.prototype.saveAll = function() {
     var docPromise = this.docs[filePath];
     docPromise.then(function(rootDoc) {
       rootDocValue = rootDoc.getValue();
+      if (stateManager.settings.trim_trailing_white_space_on_save) {
+        rootDocValue = rootDocValue.split('\n').map(function(line) {
+          return line.replace(/\s+$/, '');
+        }).join('\n');
+      }
       if (md5(rootDocValue) !== rootDoc.lastSaveContentHash) {
       	fs.set(filePath, rootDoc.getValue());
-        rootDoc.lastSaveValue = rootDocValue; 
+        rootDoc.lastSaveValue = rootDocValue;
       }
     });
   }, this)
@@ -702,7 +708,6 @@ function EditorView(parentDom, state) {
     }
   });
 
-
   var editor = this.editor = CodeMirror(editorDom, {
     lineWrapping: false,
     fixedGutter: true,
@@ -732,7 +737,7 @@ function EditorView(parentDom, state) {
 mixin(EditorView.prototype, DraggableMixin);
 
 EditorView.prototype.focus = function() {
-  this.editor.focus(); 
+  this.editor.focus();
 }
 
 EditorView.prototype.toggleGutter = function() {
@@ -1062,7 +1067,7 @@ HeadsUpPanel.prototype.updateList = function() {
       });
     }
   }
-  
+
   results = results.sort(function(a, b) {
     return a.score - b.score;
   }).map(function(obj) { return obj.entry; });
@@ -1171,7 +1176,7 @@ function onLoad() {
       top: snap(evt.pageY) + 'px',
       left: snap(evt.pageX) + 'px'
     });
-    
+
     evt.preventDefault();
     evt.stopPropagation();
   });
